@@ -1,12 +1,12 @@
 # Compiled output
 plugins/*/main.js
 *.js.map
+dist/
 
 # Node modules
 node_modules/
 
-# npm
-package-lock.json
+# npm/pnpm/yarn lock files (keep package-lock for npm workspaces)
 yarn.lock
 pnpm-lock.yaml
 
@@ -33,3 +33,27 @@ yarn-error.log*
 # Temporary files
 *.tmp
 .temp/
+
+# Nuxt
+.nuxt/
+.output/
+
+# Nitro
+.nitro/
+
+# Tauri
+apps/desktop/src-tauri/target/
+
+# Drizzle migrations (generated)
+drizzle/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+
+# PGlite local data
+*.db

@@ -1,0 +1,21 @@
+{
+  "name": "@unimem/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nitro dev",
+    "build": "nitro build",
+    "preview": "nitro preview",
+    "deploy": "nitro deploy"
+  },
+  "dependencies": {
+    "@unimem/types": "*",
+    "h3": "^2.10.0",
+    "nitropack": "^2.8.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "wrangler": "^3.22.0"
+  }
+}

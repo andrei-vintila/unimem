@@ -3,20 +3,35 @@
   "version": "0.1.0",
   "description": "Neural memory architecture - organizing information using cognitive memory systems",
   "private": true,
-  "workspaces": [
-    "plugins/*"
-  ],
   "scripts": {
-    "dev": "npm run dev --workspace=@unimem/obsidian-plugin",
-    "build": "npm run build --workspace=@unimem/obsidian-plugin",
-    "build:all": "npm run build --workspaces"
+    "dev": "pnpm --filter @unimem/web dev",
+    "dev:desktop": "pnpm --filter @unimem/desktop dev",
+    "dev:server": "pnpm --filter @unimem/server dev",
+    "dev:obsidian": "pnpm --filter @unimem/obsidian-plugin dev",
+    "build": "pnpm -r build",
+    "build:packages": "pnpm --filter @unimem/types build && pnpm --filter @unimem/core build && pnpm --filter @unimem/db build",
+    "build:web": "pnpm --filter @unimem/web build",
+    "build:desktop": "pnpm --filter @unimem/desktop build",
+    "build:server": "pnpm --filter @unimem/server build",
+    "build:obsidian": "pnpm --filter @unimem/obsidian-plugin build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf node_modules packages/*/dist packages/*/node_modules apps/*/dist apps/*/.output apps/*/.nuxt apps/*/node_modules plugins/*/main.js plugins/*/node_modules"
   },
   "keywords": [
     "memory",
     "knowledge-management",
-    "neural-architecture"
+    "neural-architecture",
+    "pglite",
+    "electric-sql",
+    "local-first"
   ],
   "author": "Andrei Vintila",
   "license": "MIT",
-  "devDependencies": {}
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
 }

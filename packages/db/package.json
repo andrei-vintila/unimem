@@ -1,0 +1,31 @@
+{
+  "name": "@unimem/db",
+  "version": "0.1.0",
+  "description": "PGlite + ElectricSQL database layer for Unimem",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.0",
+    "@unimem/types": "workspace:*",
+    "@unimem/core": "workspace:*",
+    "drizzle-orm": "^0.34.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.25.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

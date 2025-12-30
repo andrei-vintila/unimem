@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "paths": {
+      "@unimem/types": ["./packages/types/src"],
+      "@unimem/core": ["./packages/core/src"],
+      "@unimem/db": ["./packages/db/src"]
+    }
+  },
+  "references": [
+    { "path": "./packages/types" },
+    { "path": "./packages/core" },
+    { "path": "./packages/db" }
+  ],
+  "exclude": ["node_modules", "**/dist", "**/node_modules"]
+}

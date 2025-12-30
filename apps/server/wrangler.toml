@@ -1,0 +1,43 @@
+# Cloudflare Workers configuration
+name = "unimem-sync"
+main = ".output/server/index.mjs"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Account configuration (set via wrangler CLI or environment)
+# account_id = ""
+
+# Environment variables
+[vars]
+SYNC_ENABLED = "true"
+
+# Production environment
+[env.production]
+name = "unimem-sync-prod"
+
+# KV Namespaces (for session storage, caching)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = ""
+
+# D1 Database (Cloudflare's SQLite)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "unimem"
+# database_id = ""
+
+# Durable Objects (for real-time sync coordination)
+# [[durable_objects.bindings]]
+# name = "SYNC_COORDINATOR"
+# class_name = "SyncCoordinator"
+
+# R2 Storage (for file attachments)
+# [[r2_buckets]]
+# binding = "STORAGE"
+# bucket_name = "unimem-files"
+
+# Rate limiting
+# [[rules]]
+# type = "rate_limit"
+# expression = "true"
+# action = "log"
