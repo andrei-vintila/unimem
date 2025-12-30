@@ -40,6 +40,10 @@ yarn-error.log*
 
 # Nitro
 .nitro/
+.wrangler/
+
+# Node compile cache
+node-compile-cache/
 
 # Tauri
 apps/desktop/src-tauri/target/
