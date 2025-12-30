@@ -1,4 +1,4 @@
-import { defineNitroConfig } from 'nitropack/config';
+import { defineNitroConfig } from 'nitro/config';
 
 export default defineNitroConfig({
   // Cloudflare Workers preset
@@ -34,7 +34,7 @@ export default defineNitroConfig({
   },
 
   // Source directory
-  srcDir: '.',
+  serverDir: '.',
 
   // Cloudflare specific configuration
   cloudflare: {
