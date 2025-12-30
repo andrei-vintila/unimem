@@ -1,0 +1,10 @@
+{
+  "id": "unimem",
+  "name": "Unimem",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "Neural memory architecture for Obsidian - organize notes using cognitive memory systems (working, episodic, semantic, procedural)",
+  "author": "Andrei Vintila",
+  "authorUrl": "https://github.com/andreivintila/unimem",
+  "isDesktopOnly": false
+}

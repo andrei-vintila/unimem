@@ -1,0 +1,22 @@
+{
+  "name": "unimem",
+  "version": "0.1.0",
+  "description": "Neural memory architecture - organizing information using cognitive memory systems",
+  "private": true,
+  "workspaces": [
+    "plugins/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@unimem/obsidian-plugin",
+    "build": "npm run build --workspace=@unimem/obsidian-plugin",
+    "build:all": "npm run build --workspaces"
+  },
+  "keywords": [
+    "memory",
+    "knowledge-management",
+    "neural-architecture"
+  ],
+  "author": "Andrei Vintila",
+  "license": "MIT",
+  "devDependencies": {}
+}
