@@ -5,8 +5,11 @@ on:
     branches: ['**']
   pull_request:
 
+# Cancel in-progress runs for the same PR or the same commit on a branch push.
+# Using pull_request.number groups the push-event and pull_request-event for the
+# same PR into one concurrency slot, preventing duplicate runs.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -55,16 +58,6 @@ jobs:
       - name: Build packages
         run: pnpm build:packages
 
-      - name: Upload packages dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-dist
-          path: |
-            packages/types/dist
-            packages/core/dist
-            packages/db/dist
-          retention-days: 1
-
   build-server:
     name: Build server
     runs-on: ubuntu-latest
@@ -84,10 +77,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Restore packages dist
-        uses: actions/download-artifact@v4
-        with:
-          name: packages-dist
+      - name: Build packages
+        run: pnpm build:packages
 
       - name: Build server
         run: pnpm build:server
@@ -118,10 +109,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Restore packages dist
-        uses: actions/download-artifact@v4
-        with:
-          name: packages-dist
+      - name: Build packages
+        run: pnpm build:packages
 
       - name: Build web
         run: pnpm build:web
@@ -152,10 +141,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Restore packages dist
-        uses: actions/download-artifact@v4
-        with:
-          name: packages-dist
+      - name: Build packages
+        run: pnpm build:packages
 
       - name: Build Obsidian plugin
         run: pnpm build:obsidian
