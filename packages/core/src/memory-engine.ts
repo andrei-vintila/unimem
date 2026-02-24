@@ -181,7 +181,7 @@ export class MemoryEngine {
       ...updates,
       embedding,
       updatedAt: new Date(),
-    } as Partial<T>);
+    } as unknown as Partial<T>);
 
     this.emit('entity:updated', updated);
 

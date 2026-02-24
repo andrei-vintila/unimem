@@ -1,8 +1,14 @@
+import { fileURLToPath } from 'node:url';
 import { defineNitroConfig } from 'nitro/config';
 
 export default defineNitroConfig({
   // Cloudflare Workers preset
   preset: 'cloudflare-module',
+
+  // Resolve ~ to the server source root so utils/ imports work with Rollup
+  alias: {
+    '~': fileURLToPath(new URL('.', import.meta.url)),
+  },
 
   // Experimental features
   experimental: {
