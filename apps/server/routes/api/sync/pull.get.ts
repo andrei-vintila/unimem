@@ -1,4 +1,5 @@
 import type { Entity } from '@unimem/types';
+import { getEntitiesAfterVersion, generateVersion } from '~/utils/syncStore';
 
 interface PullResponse {
   entities: Entity[];
@@ -9,8 +10,8 @@ interface PullResponse {
 export default defineEventHandler(async (event): Promise<PullResponse> => {
   const query = getQuery(event);
   const clientId = query.clientId as string;
-  const lastSyncVersion = query.lastSyncVersion as string;
-  const limit = parseInt(query.limit as string) || 100;
+  const lastSyncVersion = (query.lastSyncVersion as string) || '0';
+  const limit = Math.min(parseInt((query.limit as string) || '100', 10), 500);
 
   if (!clientId) {
     throw createError({
@@ -19,26 +20,26 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     });
   }
 
-  // TODO: Implement actual sync logic with ElectricSQL
-  // For now, this returns an empty set
-
-  console.log(`[Sync] Pull for client ${clientId}:`, {
+  const { items, hasMore } = await getEntitiesAfterVersion(
     lastSyncVersion,
-    limit,
-  });
+    clientId,
+    limit
+  );
 
-  // In a real implementation, you would:
-  // 1. Query entities modified after lastSyncVersion
-  // 2. Filter by clientId to exclude own changes
-  // 3. Paginate results
+  // The new cursor for the client is the version of the last returned item.
+  // If nothing changed, echo back the client's cursor so it doesn't regress.
+  const syncVersion =
+    items.length > 0
+      ? items[items.length - 1].serverVersion
+      : lastSyncVersion || generateVersion();
+
+  console.log(
+    `[Sync] Pull for ${clientId} since ${lastSyncVersion}: ${items.length} entities, hasMore=${hasMore}`
+  );
 
   return {
-    entities: [],
-    syncVersion: lastSyncVersion || generateSyncVersion(),
-    hasMore: false,
+    entities: items.map((s) => s.entity),
+    syncVersion,
+    hasMore,
   };
 });
-
-function generateSyncVersion(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}

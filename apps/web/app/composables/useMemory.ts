@@ -47,6 +47,15 @@ export function useMemory() {
       // Load initial stats
       stats.value = await memoryEngine.getStats();
 
+      // Initialise sync manager if a server URL is configured
+      const runtimeConfig = useRuntimeConfig();
+      const serverUrl = runtimeConfig.public?.syncServerUrl as string | undefined;
+      if (serverUrl) {
+        const { init, start } = useSync();
+        init(dbClient, serverUrl);
+        start();
+      }
+
       isInitialized.value = true;
     } catch (error) {
       console.error('Failed to initialize memory system:', error);
