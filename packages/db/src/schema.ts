@@ -65,14 +65,14 @@ export const entities = pgTable(
     syncStatus: text('sync_status').default('synced'),
     syncVersion: text('sync_version'),
   },
-  (table) => [
-    index('idx_entities_type').on(table.type),
-    index('idx_entities_memory_layer').on(table.memoryLayer),
-    index('idx_entities_created_at').on(table.createdAt),
-    index('idx_entities_updated_at').on(table.updatedAt),
+  (table) => ({
+    idxType: index('idx_entities_type').on(table.type),
+    idxMemoryLayer: index('idx_entities_memory_layer').on(table.memoryLayer),
+    idxCreatedAt: index('idx_entities_created_at').on(table.createdAt),
+    idxUpdatedAt: index('idx_entities_updated_at').on(table.updatedAt),
     // Note: Vector similarity index would be:
     // CREATE INDEX ON entities USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-  ]
+  })
 );
 
 // -----------------------------------------------------------------------------
@@ -146,10 +146,10 @@ export const tasks = pgTable(
     dueDate: timestamp('due_date'),
     projectId: uuid('project_id').references(() => projects.id),
   },
-  (table) => [
-    index('idx_tasks_status').on(table.status),
-    index('idx_tasks_due_date').on(table.dueDate),
-  ]
+  (table) => ({
+    idxStatus: index('idx_tasks_status').on(table.status),
+    idxDueDate: index('idx_tasks_due_date').on(table.dueDate),
+  })
 );
 
 // -----------------------------------------------------------------------------

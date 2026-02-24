@@ -283,7 +283,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
   // ---------------------------------------------------------------------------
 
   private rowToEntity<T extends Entity>(row: EntityRow): T {
-    const base: Entity = {
+    const base = {
       id: row.id,
       type: row.type as EntityType,
       memoryLayer: row.memoryLayer as MemoryLayerType,
@@ -296,13 +296,13 @@ export class PGliteStorageAdapter implements StorageAdapter {
       updatedAt: row.updatedAt,
     };
 
-    // Merge in type-specific metadata
+    // Merge in type-specific metadata (e.g. resourceType, date, email, etc.)
     const metadata = row.metadata as Record<string, unknown> | null;
     if (metadata) {
       Object.assign(base, metadata);
     }
 
-    return base as T;
+    return base as unknown as T;
   }
 
   private extractMetadata(entity: Partial<Entity>): Record<string, unknown> {

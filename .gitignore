@@ -6,9 +6,8 @@ dist/
 # Node modules
 node_modules/
 
-# npm/pnpm/yarn lock files (keep package-lock for npm workspaces)
+# npm/yarn lock files (pnpm-lock.yaml is committed)
 yarn.lock
-pnpm-lock.yaml
 
 # TypeScript
 *.tsbuildinfo

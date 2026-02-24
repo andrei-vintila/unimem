@@ -168,7 +168,7 @@ export interface SearchResponse<T extends Entity = Entity> {
 // Sync & Replication Types (ElectricSQL)
 // -----------------------------------------------------------------------------
 
-export type SyncStatus = 'synced' | 'pending' | 'conflict' | 'error';
+export type SyncStatus = 'synced' | 'pending' | 'syncing' | 'conflict' | 'error';
 
 export interface SyncState {
   status: SyncStatus;
