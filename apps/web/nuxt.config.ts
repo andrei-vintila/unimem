@@ -1,18 +1,27 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import tailwindcss from '@tailwindcss/vite';
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
 
   modules: [
     '@pinia/nuxt',
-    '@nuxtjs/tailwindcss',
     '@vueuse/nuxt',
   ],
 
+  // Tailwind v4 is a Vite plugin rather than a Nuxt module, and its config
+  // lives in the stylesheet (`@theme`) instead of tailwind.config.ts.
+  css: ['~/assets/css/tailwind.css'],
+
+  // Opt in to Nuxt 5 defaults ahead of the release: the Options API runtime is
+  // compiled out (every component here is `<script setup>`), unhead's legacy
+  // plugin set is dropped, payload extraction becomes client-only, and the Vite
+  // Environment API is enabled.
   future: {
-    compatibilityVersion: 4,
+    compatibilityVersion: 5,
   },
 
-  compatibilityDate: '2024-12-01',
+  compatibilityDate: '2026-08-15',
 
   // App configuration
   app: {
@@ -27,11 +36,6 @@ export default defineNuxtConfig({
   // TypeScript configuration
   typescript: {
     strict: true,
-  },
-
-  // Tailwind configuration
-  tailwindcss: {
-    cssPath: '~/assets/css/tailwind.css',
   },
 
   // Runtime config
@@ -78,6 +82,7 @@ export default defineNuxtConfig({
 
   // Vite configuration for PGlite
   vite: {
+    plugins: [tailwindcss()],
     optimizeDeps: {
       exclude: ['@electric-sql/pglite'],
     },

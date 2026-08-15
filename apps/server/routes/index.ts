@@ -1,3 +1,5 @@
+import { defineEventHandler } from 'h3';
+
 // Root route handler
 export default defineEventHandler(() => {
   return {

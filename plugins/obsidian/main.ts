@@ -25,7 +25,10 @@ const DEFAULT_SETTINGS: UnimemSettings = {
 };
 
 export default class UnimemPlugin extends Plugin {
-	settings: UnimemSettings;
+	// Assigned by `loadSettings()` as the first thing `onload()` awaits, which
+	// the compiler cannot see. Obsidian constructs the plugin itself, so there
+	// is no constructor to initialise it in.
+	settings!: UnimemSettings;
 
 	async onload() {
 		await this.loadSettings();

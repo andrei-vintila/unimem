@@ -1,3 +1,5 @@
+import { defineEventHandler } from 'h3';
+
 // Health check endpoint
 export default defineEventHandler(() => {
   return {

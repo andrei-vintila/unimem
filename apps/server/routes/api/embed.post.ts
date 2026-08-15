@@ -1,3 +1,9 @@
+import { createError, defineEventHandler, readBody } from 'h3';
+import { useRuntimeConfig } from 'nitro/runtime-config';
+
+import { toErrorCode, trackEvents } from '~/utils/analytics';
+import { getAuthToken } from '~/utils/auth';
+
 // Embedding endpoint - proxies to OpenAI
 interface EmbedRequest {
   texts: string[];
@@ -17,7 +23,10 @@ export default defineEventHandler(async (event): Promise<EmbedResponse> => {
   // `trackEvents` hashes it before anything leaves the Worker.
   const actor = getAuthToken(event) ?? 'anonymous';
 
-  if (!body.texts || body.texts.length === 0) {
+  // h3 v2 resolves `readBody` to `T | undefined` - a request with no body at
+  // all reaches here as undefined, and used to fault on the property access
+  // below and surface as a 500 instead of this 400.
+  if (!body?.texts || body.texts.length === 0) {
     throw createError({
       statusCode: 400,
       message: 'texts array is required',

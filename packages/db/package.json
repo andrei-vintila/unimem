@@ -18,14 +18,14 @@
     "db:migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.2.0",
+    "@electric-sql/pglite": "^0.5.5",
     "@unimem/core": "workspace:*",
     "@unimem/types": "workspace:*",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3"
   }
 }

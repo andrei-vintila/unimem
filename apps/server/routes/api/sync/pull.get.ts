@@ -1,3 +1,6 @@
+import { createError, defineEventHandler, getQuery } from 'h3';
+
+import { trackEvents } from '~/utils/analytics';
 import type { Entity } from '@unimem/types';
 import { getEntitiesAfterVersion, generateVersion } from '~/utils/syncStore';
 

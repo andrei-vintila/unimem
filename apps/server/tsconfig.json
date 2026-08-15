@@ -1,12 +1,12 @@
 {
+  // Nitro v3 ships this base config. Unlike v2 it generates no ambient
+  // declarations for auto-imported helpers, so the handlers import them by
+  // name; `nitro prepare` produces nothing and is not part of typechecking.
+  "extends": "nitro/tsconfig",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2022"],
-    "strict": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true
+    "paths": {
+      "~/*": ["./*"]
+    }
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", ".output", ".nitro"]

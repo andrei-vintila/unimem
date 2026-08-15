@@ -12,23 +12,24 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
-    "@pinia/nuxt": "^0.5.1",
+    "@pinia/nuxt": "^1.0.2",
     "@unimem/analytics": "workspace:*",
     "@unimem/core": "workspace:*",
     "@unimem/db": "workspace:*",
     "@unimem/types": "workspace:*",
-    "pinia": "^2.1.7",
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5"
+    "pinia": "^4.0.3",
+    "vue": "^3.5.41",
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
-    "@nuxt/devtools": "^1.0.0",
+    "@nuxt/devtools": "^3.4.1",
     "@nuxtjs/tailwindcss": "^6.10.0",
-    "@vueuse/core": "^10.11.1",
-    "@vueuse/nuxt": "^10.7.0",
-    "nuxt": "^3.9.0",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vueuse/core": "^14.4.0",
+    "@vueuse/nuxt": "^14.4.0",
+    "nuxt": "^4.5.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
     "vue-tsc": "^3.3.10"
   }
 }

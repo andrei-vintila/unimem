@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import { useRuntimeConfig } from 'nitro/runtime-config';
 import { createEdgeAnalytics, hashDistinctId } from '@unimem/analytics/edge';
 import type { UnimemEvent } from '@unimem/analytics';
 

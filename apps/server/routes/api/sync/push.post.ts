@@ -1,3 +1,6 @@
+import { createError, defineEventHandler, readBody } from 'h3';
+
+import { trackEvents } from '~/utils/analytics';
 import type { Entity } from '@unimem/types';
 import {
   getStoredEntity,
@@ -25,7 +28,8 @@ export default defineEventHandler(async (event): Promise<PushResponse> => {
   const startedAt = Date.now();
   const body = await readBody<PushPayload>(event);
 
-  if (!body.clientId || !Array.isArray(body.entities)) {
+  // h3 v2 resolves `readBody` to `T | undefined`; see the note in embed.post.ts.
+  if (!body?.clientId || !Array.isArray(body.entities)) {
     throw createError({
       statusCode: 400,
       message: 'Invalid push payload: clientId and entities are required',

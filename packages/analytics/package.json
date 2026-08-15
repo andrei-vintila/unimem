@@ -26,9 +26,9 @@
   },
   "dependencies": {
     "@unimem/types": "workspace:*",
-    "posthog-js": "^1.414.0"
+    "posthog-js": "^1.417.1"
   },
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "typescript": "^6.0.3"
   }
 }

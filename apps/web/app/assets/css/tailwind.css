@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * Class-based dark mode. Tailwind v4 defaults `dark:` to `prefers-color-scheme`;
+ * this restores the v3 `darkMode: 'class'` behaviour that the Settings page
+ * depends on, since choosing Light or Dark there has to beat the OS setting.
+ * See app/composables/useTheme.ts.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Was `theme.extend` in tailwind.config.ts, which v4 replaces with `@theme`.
+ * Each token generates the matching utilities (`bg-working-50`,
+ * `text-episodic-600`, `font-mono`, ...).
+ */
+@theme {
+  /* Neural memory layer colors */
+  --color-working-50: #fef3c7;
+  --color-working-100: #fde68a;
+  --color-working-500: #f59e0b;
+  --color-working-600: #d97706;
+
+  --color-episodic-50: #dbeafe;
+  --color-episodic-100: #bfdbfe;
+  --color-episodic-500: #3b82f6;
+  --color-episodic-600: #2563eb;
+
+  --color-semantic-50: #dcfce7;
+  --color-semantic-100: #bbf7d0;
+  --color-semantic-500: #22c55e;
+  --color-semantic-600: #16a34a;
+
+  --color-procedural-50: #f3e8ff;
+  --color-procedural-100: #e9d5ff;
+  --color-procedural-500: #a855f7;
+  --color-procedural-600: #9333ea;
+
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+@layer base {
+  /*
+   * Surface tokens consumed as `bg-[var(--color-background)]` and friends.
+   * v3 resolved these with `theme()`; v4 publishes its palette as CSS
+   * variables, so they can reference it directly and stay in sync.
+   */
+  :root {
+    --color-background: var(--color-white);
+    --color-foreground: var(--color-gray-900);
+    --color-muted: var(--color-gray-500);
+    --color-border: var(--color-gray-200);
+  }
+
+  .dark {
+    --color-background: var(--color-gray-950);
+    --color-foreground: var(--color-gray-100);
+    --color-muted: var(--color-gray-400);
+    --color-border: var(--color-gray-800);
+  }
+
+  body {
+    @apply bg-[var(--color-background)] text-[var(--color-foreground)];
+    @apply antialiased;
+  }
+}
+
+@layer components {
+  /*
+   * Shared via a selector list rather than `.btn-primary { @apply btn }`:
+   * v4 only lets `@apply` take real utilities, not other custom classes.
+   * Templates use `btn-primary` on its own, so each variant needs the base.
+   */
+  .btn,
+  .btn-primary,
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors;
+    /* v4 renamed v3's `outline-none` to `outline-hidden`; plain `outline-none`
+       now sets `outline-style: none` and would drop the focus ring. */
+    @apply focus:outline-hidden focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700;
+    @apply focus:ring-blue-500;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300;
+    @apply focus:ring-gray-500;
+  }
+
+  .card {
+    /* v3 `shadow-sm` is v4 `shadow-xs` - the scale shifted by one step. */
+    @apply bg-white dark:bg-gray-900 rounded-xl shadow-xs;
+    @apply border border-[var(--color-border)];
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-lg border border-[var(--color-border)];
+    @apply bg-[var(--color-background)] text-[var(--color-foreground)];
+    @apply focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+}

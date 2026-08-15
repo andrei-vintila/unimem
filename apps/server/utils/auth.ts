@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3';
+import { createError, getHeader, type H3Event } from 'h3';
 
 /**
  * Extract and validate auth token from request
