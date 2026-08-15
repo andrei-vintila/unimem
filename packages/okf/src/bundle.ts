@@ -51,6 +51,12 @@ export interface Tombstone {
 
 export interface BundleReadResult {
   entities: Entity[];
+  /**
+   * Documents that carried no `resource` and were given a path-derived one.
+   * Their identity is only stable while their path is, so the caller should
+   * write them back to claim them - see `OkfStorageAdapter.rebuild`.
+   */
+  unclaimed: Array<{ path: string; id: string }>;
   /** Deletions recorded in log.md - see `appendDeletion`. */
   tombstones: Tombstone[];
   /** Documents that were not conformant, with the reason. Never thrown. */
@@ -70,6 +76,7 @@ export async function readBundle(
 ): Promise<BundleReadResult> {
   const entities: Entity[] = [];
   const skipped: BundleReadResult['skipped'] = [];
+  const unclaimed: BundleReadResult['unclaimed'] = [];
 
   async function walk(dir: string): Promise<void> {
     for (const name of await fs.list(dir)) {
@@ -82,15 +89,23 @@ export async function readBundle(
 
       if (!name.endsWith('.md') || RESERVED_FILENAMES.has(name)) continue;
 
+      const relativePath = relative(root, full);
+
       try {
         const doc = parseDocument(await fs.readFile(full));
         // A document with no `resource` gets an id derived from its path, so
         // the same file yields the same entity on every device that reads it
         // rather than a fresh duplicate each time.
-        entities.push(documentToEntity(doc, idForPath(relative(root, full))));
+        const fallback = idForPath(relativePath);
+        const entity = documentToEntity(doc, fallback);
+
+        if (typeof doc.frontmatter.resource !== 'string') {
+          unclaimed.push({ path: relativePath, id: entity.id });
+        }
+        entities.push(entity);
       } catch (error) {
         skipped.push({
-          path: relative(root, full),
+          path: relativePath,
           reason:
             error instanceof OkfParseError
               ? error.message
@@ -102,7 +117,7 @@ export async function readBundle(
 
   await walk(root);
 
-  return { entities, tombstones: await readLog(fs, root), skipped };
+  return { entities, tombstones: await readLog(fs, root), skipped, unclaimed };
 }
 
 // -----------------------------------------------------------------------------
@@ -126,9 +141,18 @@ export async function writeEntity(
   await fs.mkdir(join(root, dir));
 
   const existing = knownPaths?.get(resourceForId(entity.id));
-  const target = existing ?? join(dir, await freeFilename(fs, root, dir, entity));
+  const target = await desiredPath(fs, root, dir, entity, existing);
 
   await fs.writeFile(join(root, target), serializeDocument(entityToDocument(entity)));
+
+  // Retitling moves the note rather than leaving it at a filename that no
+  // longer describes it - a vault is read by people, in a file browser, and
+  // "Ada King" living in ada-lovelace.md is worse than a rename. Safe because
+  // identity is `resource`: other devices match on that, not on the path.
+  if (existing && existing !== target) {
+    await fs.deleteFile(join(root, existing));
+  }
+
   return target;
 }
 
@@ -178,11 +202,20 @@ export async function indexPaths(
       }
       if (!name.endsWith('.md') || RESERVED_FILENAMES.has(name)) continue;
 
+      const relativePath = relative(root, full);
+
       try {
         const doc = parseDocument(await fs.readFile(full));
-        if (typeof doc.frontmatter.resource === 'string') {
-          paths.set(doc.frontmatter.resource, relative(root, full));
-        }
+
+        // Falls back to the path-derived identity for the same reason
+        // `readBundle` does: a document nobody has claimed yet still has to be
+        // findable, or it can never be moved or deleted.
+        paths.set(
+          typeof doc.frontmatter.resource === 'string'
+            ? doc.frontmatter.resource
+            : resourceForId(idForPath(relativePath)),
+          relativePath
+        );
       } catch {
         // Unreadable documents simply have no known path.
       }
@@ -249,18 +282,32 @@ function insertLogEntry(existing: string, day: string, entry: string): string {
 // Paths
 // -----------------------------------------------------------------------------
 
-async function freeFilename(
+/**
+ * Where this entity's document belongs now.
+ *
+ * Returns `existing` unchanged when the entity still slugs to the file it is
+ * already in, so an ordinary edit rewrites in place rather than churning the
+ * path on every save.
+ */
+async function desiredPath(
   fs: BundleFs,
   root: string,
   dir: string,
-  entity: Entity
+  entity: Entity,
+  existing?: string
 ): Promise<string> {
   const slug = slugify(entity.title);
+  const plain = join(dir, `${slug}.md`);
 
-  if (!(await fs.exists(join(root, dir, `${slug}.md`)))) return `${slug}.md`;
+  // Already correctly placed, either plainly or under its disambiguated name.
+  if (existing === plain || existing === join(dir, `${slug}-${shortId(entity.id)}.md`)) {
+    return existing;
+  }
+
+  if (!(await fs.exists(join(root, plain)))) return plain;
 
   // Two entities that slug the same are still distinct; the id disambiguates.
-  return `${slug}-${shortId(entity.id)}.md`;
+  return join(dir, `${slug}-${shortId(entity.id)}.md`);
 }
 
 /**

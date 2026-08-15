@@ -9,6 +9,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 
+import { registerBundleHandlers } from './bundle';
 import { closeDatabase, registerDatabaseHandlers } from './database';
 import { registerPathHandlers } from './paths';
 import { handleAppScheme, registerAppScheme } from './protocol';
@@ -55,6 +56,7 @@ function main(): void {
 
     registerPathHandlers();
     registerDatabaseHandlers();
+    registerBundleHandlers();
     createMainWindow({ devUrl: isDev ? DEV_URL : undefined });
 
     // macOS keeps the process alive after the last window closes; clicking the

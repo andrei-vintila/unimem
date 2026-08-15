@@ -12,6 +12,8 @@ export const IpcChannel = {
   DatabasePath: 'unimem:database-path',
   DbQuery: 'unimem:db-query',
   DbExec: 'unimem:db-exec',
+  BundleRoot: 'unimem:bundle-root',
+  BundleOp: 'unimem:bundle-op',
 } as const;
 
 /** Coarse OS label. Deliberately not the full user-agent or release string. */
@@ -47,6 +49,29 @@ export interface UnimemDesktopDatabase {
 }
 
 /**
+ * One operation against the OKF bundle.
+ *
+ * A single channel rather than one per verb, so the main process has exactly
+ * one place that validates a path - and every path is resolved against the
+ * bundle root and rejected if it escapes.
+ */
+export interface BundleOpRequest {
+  op: 'list' | 'isDirectory' | 'readFile' | 'writeFile' | 'deleteFile' | 'mkdir' | 'exists';
+  /** Bundle-relative. Never absolute, never containing `..`. */
+  path: string;
+  content?: string;
+}
+
+/**
+ * The markdown bundle that is the actual store, reached the same way as the
+ * index: the renderer is sandboxed and has no filesystem of its own.
+ */
+export interface UnimemDesktopBundle {
+  root(): Promise<string>;
+  op(request: BundleOpRequest): Promise<unknown>;
+}
+
+/**
  * The entire surface the renderer gets. Everything here is exposed through
  * `contextBridge`, so it is also the full list of things a compromised
  * renderer could reach - keep it small and keep every handler validating.
@@ -65,6 +90,7 @@ export interface UnimemDesktopBridge {
   getDatabasePath(): Promise<string>;
 
   readonly db: UnimemDesktopDatabase;
+  readonly bundle: UnimemDesktopBundle;
 }
 
 export function toDesktopPlatform(

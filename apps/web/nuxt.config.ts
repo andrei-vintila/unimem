@@ -77,7 +77,7 @@ export default defineNuxtConfig({
 
   // Build optimizations
   build: {
-    transpile: ['@unimem/analytics', '@unimem/core', '@unimem/db', '@unimem/types'],
+    transpile: ['@unimem/analytics', '@unimem/core', '@unimem/db', '@unimem/okf', '@unimem/types'],
   },
 
   // Vite configuration for PGlite

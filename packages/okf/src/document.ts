@@ -90,7 +90,9 @@ export function documentToEntity(doc: OkfDocument, fallbackId: string): Entity {
     id: idFromResource(fm.resource) ?? fallbackId,
     type: fm.type as EntityType,
     title: typeof fm.title === 'string' ? fm.title : headingOf(doc.body) ?? 'Untitled',
-    content: doc.body.trimEnd(),
+    // Trimmed both ends: the blank line after the frontmatter fence is
+    // separator, not content, and would otherwise ride along into the entity.
+    content: doc.body.trim(),
     memoryLayer: (fm.memory_layer as MemoryLayerType) ?? layerForType(fm.type as EntityType),
     tags: Array.isArray(fm.tags) ? fm.tags.map(String) : [],
     links: parseLinks(fm.links),

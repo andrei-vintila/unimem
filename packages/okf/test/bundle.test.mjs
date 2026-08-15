@@ -75,12 +75,51 @@ test('retitling moves the file instead of forking a second copy', async () => {
   await writeEntity(bundleFs, root, entity());
 
   const known = await indexPaths(bundleFs, root);
-  await writeEntity(bundleFs, root, entity({ title: 'Ada King' }), known);
+  const moved = await writeEntity(bundleFs, root, entity({ title: 'Ada King' }), known);
+
+  // The filename has to follow the title, or the vault fills up with notes
+  // whose names describe what they used to be called.
+  assert.equal(moved, 'person/ada-king.md');
+  assert.deepEqual(
+    await fs.readdir(path.join(root, 'person')),
+    ['ada-king.md'],
+    'the old file is gone, not left behind as a duplicate'
+  );
 
   const { entities } = await readBundle(bundleFs, root);
   assert.equal(entities.length, 1, 'still one entity, not two');
   assert.equal(entities[0].title, 'Ada King');
   assert.equal(entities[0].id, '11111111-1111-4111-8111-111111111111');
+});
+
+test('an ordinary edit rewrites in place without churning the path', async () => {
+  const root = await tempBundle();
+  const first = await writeEntity(bundleFs, root, entity());
+
+  const known = await indexPaths(bundleFs, root);
+  const second = await writeEntity(
+    bundleFs,
+    root,
+    entity({ content: 'Revised.' }),
+    known
+  );
+
+  assert.equal(second, first, 'same title, same path');
+  assert.deepEqual(await fs.readdir(path.join(root, 'person')), ['ada-lovelace.md']);
+});
+
+test('a disambiguated file keeps its name across edits', async () => {
+  const root = await tempBundle();
+
+  await writeEntity(bundleFs, root, entity());
+  const second = { ...entity({ id: '33333333-3333-4333-8333-333333333333' }) };
+  const secondPath = await writeEntity(bundleFs, root, second);
+
+  const known = await indexPaths(bundleFs, root);
+  const again = await writeEntity(bundleFs, root, { ...second, content: 'Edited.' }, known);
+
+  assert.equal(again, secondPath, 'does not oscillate between names');
+  assert.equal((await fs.readdir(path.join(root, 'person'))).length, 2);
 });
 
 test('two entities that slug alike get distinct files', async () => {

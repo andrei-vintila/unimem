@@ -15,6 +15,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   IpcChannel,
   toDesktopPlatform,
+  type BundleOpRequest,
   type DbQueryRequest,
   type UnimemDesktopBridge,
 } from '../shared/ipc';
@@ -38,6 +39,18 @@ const bridge: UnimemDesktopBridge = {
         rowMode: request.rowMode,
       }),
     exec: (sql: string) => ipcRenderer.invoke(IpcChannel.DbExec, sql),
+  },
+
+  bundle: {
+    root: () => ipcRenderer.invoke(IpcChannel.BundleRoot),
+    // Rebuilt field by field, as above: the request object belongs to the
+    // caller and only these three properties belong on the wire.
+    op: (request: BundleOpRequest) =>
+      ipcRenderer.invoke(IpcChannel.BundleOp, {
+        op: request.op,
+        path: request.path,
+        content: request.content,
+      }),
   },
 };
 

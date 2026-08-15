@@ -7,4 +7,5 @@ export * from './schema-sql.js';
 export * from './client.js';
 export * from './remote-client.js';
 export * from './storage-adapter.js';
+export * from './okf-storage-adapter.js';
 export * from './sync.js';

@@ -60,7 +60,7 @@ test('an entity survives a round trip through markdown', () => {
   assert.equal(result.title, 'Ada Lovelace');
   assert.equal(result.memoryLayer, 'episodic');
   assert.deepEqual(result.tags, ['maths', 'history']);
-  assert.equal(result.content.trim(), original.content.trim());
+  assert.equal(result.content, original.content, 'content is byte-identical');
 
   assert.equal(result.createdAt.toISOString(), '2026-08-01T09:00:00.000Z');
   assert.equal(result.updatedAt.toISOString(), '2026-08-15T10:00:00.000Z');

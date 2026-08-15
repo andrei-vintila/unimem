@@ -30,11 +30,16 @@ const version = computed(
 );
 
 const storageLocation = ref('Loading...');
+const vaultLocation = ref<string | null>(null);
 
 onMounted(async () => {
   storageLocation.value = bridge.value
     ? await bridge.value.getDatabasePath()
     : 'IndexedDB (idb://unimem)';
+
+  // The vault is the store; the database above it is only a derived index.
+  // On web there is no filesystem to hold one.
+  vaultLocation.value = bridge.value ? await bridge.value.bundle.root() : null;
 });
 
 const isRefreshing = ref(false);
@@ -117,9 +122,21 @@ async function applySyncSettings() {
       <h2 class="text-xl font-semibold mb-4">Storage</h2>
       <div class="card p-4">
         <dl class="space-y-3">
+          <div v-if="vaultLocation" class="flex gap-4">
+            <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">
+              Vault
+            </dt>
+            <dd class="text-sm font-mono break-all">
+              {{ vaultLocation }}
+              <p class="font-sans text-[var(--color-muted)] mt-1">
+                Markdown files, one per entity. This is the store — open it in
+                Obsidian, track it in git, edit it by hand.
+              </p>
+            </dd>
+          </div>
           <div class="flex gap-4">
             <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">
-              Database
+              {{ vaultLocation ? 'Index' : 'Database' }}
             </dt>
             <dd class="text-sm font-mono break-all">{{ storageLocation }}</dd>
           </div>
