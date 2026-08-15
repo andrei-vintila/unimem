@@ -1,0 +1,32 @@
+{
+  "name": "@unimem/okf",
+  "version": "0.1.0",
+  "description": "Open Knowledge Format bundles as unimem's source of truth",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node-fs.d.ts",
+      "import": "./dist/node-fs.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "tsc && node --test test/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@unimem/types": "workspace:*",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^6.0.3"
+  }
+}

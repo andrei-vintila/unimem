@@ -76,6 +76,19 @@ export interface BaseEntity {
    */
   deletedAt?: Date;
 
+  /**
+   * Who produced this entity, and who last changed it.
+   *
+   * A vault has more than one contributor, so "when" is not enough to explain
+   * a change - and once an agent can write here too, the distinction between a
+   * person and a process is the difference between a fact and a suggestion.
+   *
+   * Values follow OKF's actor convention: `human:<id>` for a person,
+   * `<producer>/<version>` for an agent, `process:<id>` for automation.
+   */
+  createdBy?: string;
+  updatedBy?: string;
+
   // Relations
   links: EntityLink[];
   tags: string[];
