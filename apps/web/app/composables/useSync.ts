@@ -1,10 +1,11 @@
 import type { SyncState } from '@unimem/types';
-import type { SqlDatabase } from '@unimem/db';
+import type { OkfStorageAdapter, SqlDatabase } from '@unimem/db';
 import { SyncManager } from '@unimem/db';
 
 // Singleton SyncManager shared across the app
 let syncManager: SyncManager | null = null;
 let database: SqlDatabase | null = null;
+let store: OkfStorageAdapter | null = null;
 
 const IDLE: SyncState = {
   status: 'synced',
@@ -15,15 +16,23 @@ const IDLE: SyncState = {
 // Reactive state exposed to components
 const syncState = ref<SyncState>({ ...IDLE });
 
+/**
+ * Writes the server refused, because this member has no access to the folder.
+ * Surfaced separately from conflicts: a conflict is two people editing the
+ * same thing, a rejection is being told this is not yours to edit.
+ */
+const rejections = ref<Array<{ entityId: string; reason: string }>>([]);
+
 export function useSync() {
   const settings = useSyncSettings();
 
   /**
-   * Hand the sync manager the open database. Call once, after the database is
-   * ready (see useMemory).
+   * Hand the sync manager the open database, and the store if this surface has
+   * a bundle. Call once, after the database is ready (see useMemory).
    */
-  function attach(client: SqlDatabase): void {
+  function attach(client: SqlDatabase, bundle?: OkfStorageAdapter): void {
     database = client;
+    store = bundle ?? null;
     void reconfigure();
   }
 
@@ -46,6 +55,9 @@ export function useSync() {
     syncManager = new SyncManager({
       client: database,
       clientId: getOrCreateClientId(),
+      // Read at push time rather than captured: a document that moved since
+      // the manager was built must be scoped where it is now.
+      paths: () => store?.entityPaths() ?? {},
       replication: {
         enabled: true,
         serverUrl: settings.serverUrl.value,
@@ -57,12 +69,18 @@ export function useSync() {
 
     // Mirror events into reactive state
     syncManager.on((event) => {
+      if (event.type === 'sync:rejected') {
+        rejections.value = syncManager!.getRejections();
+        return;
+      }
+
       if (
         event.type === 'sync:started' ||
         event.type === 'sync:completed' ||
         event.type === 'sync:conflict'
       ) {
         syncState.value = syncManager!.getState();
+        rejections.value = syncManager!.getRejections();
       }
     });
 
@@ -84,6 +102,7 @@ export function useSync() {
 
   return {
     syncState: readonly(syncState),
+    rejections: readonly(rejections),
     attach,
     reconfigure,
     syncNow,

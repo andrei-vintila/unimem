@@ -1,0 +1,17 @@
+{
+  // Emits just the pure authorization logic so it can be unit-tested with
+  // `node --test`. It imports only types, so the compiled output has no
+  // runtime dependency on Nitro.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "rootDir": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": false,
+    "allowImportingTsExtensions": false,
+    "types": ["node"]
+  },
+  "include": ["utils/authz.ts"]
+}

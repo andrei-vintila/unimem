@@ -58,7 +58,7 @@ async function refresh() {
 // ---------------------------------------------------------------------------
 
 const { serverUrl, authToken, isConfigured, save } = useSyncSettings();
-const { syncState, reconfigure, syncNow } = useSync();
+const { syncState, rejections, reconfigure, syncNow } = useSync();
 
 const serverUrlDraft = ref(serverUrl.value);
 const authTokenDraft = ref(authToken.value);
@@ -169,9 +169,9 @@ async function applySyncSettings() {
       <h2 class="text-xl font-semibold mb-4">Sync</h2>
       <div class="card p-4">
         <p class="text-sm text-[var(--color-muted)] mb-4">
-          Point every device at the same server with the same token and they
-          share one vault. The token is what identifies the vault, so treat it
-          like a password.
+          Your token identifies you, not just your devices — use the same one
+          on each of your machines, and ask the vault owner for a token of your
+          own if you are joining someone else's. Treat it like a password.
         </p>
 
         <form class="space-y-4" @submit.prevent="applySyncSettings">
@@ -224,6 +224,30 @@ async function applySyncSettings() {
             </button>
           </div>
         </form>
+
+        <div
+          v-if="rejections.length > 0"
+          class="mt-4 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800"
+        >
+          <p class="text-sm font-medium">
+            {{ rejections.length }}
+            {{ rejections.length === 1 ? 'change was' : 'changes were' }}
+            not accepted
+          </p>
+          <p class="text-sm text-[var(--color-muted)] mt-1">
+            These are still saved here, but the server would not take them —
+            your account does not have write access to those folders.
+          </p>
+          <ul class="mt-2 space-y-1">
+            <li
+              v-for="rejection in rejections"
+              :key="rejection.entityId"
+              class="text-sm font-mono break-all"
+            >
+              {{ rejection.reason }}
+            </li>
+          </ul>
+        </div>
 
         <dl class="space-y-3 mt-6 pt-4 border-t border-[var(--color-border)]">
           <div class="flex gap-4">

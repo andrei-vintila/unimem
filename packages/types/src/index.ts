@@ -219,8 +219,9 @@ export interface ReplicationConfig {
   enabled: boolean;
   serverUrl?: string;
   /**
-   * Sync token. The server derives the vault namespace from it, so every
-   * device that should share a vault has to present the same token.
+   * Sync token, which identifies a person rather than a device. The server
+   * resolves it to a member of a vault and the folders they may write, so two
+   * people sharing a vault hold different tokens.
    */
   authToken?: string;
   syncInterval: number; // milliseconds
@@ -283,6 +284,8 @@ export type MemoryEventType =
   | 'sync:started'
   | 'sync:completed'
   | 'sync:conflict'
+  /** The server refused a write: this folder is not yours to edit. */
+  | 'sync:rejected'
   | 'consolidation:started'
   | 'consolidation:completed';
 

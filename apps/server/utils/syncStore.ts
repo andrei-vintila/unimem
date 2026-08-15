@@ -25,6 +25,17 @@ export interface StoredEntity {
   serverVersion: string;
   /** Which client last modified this entity */
   clientId: string;
+  /**
+   * Where this document lives in the bundle, which is what write grants are
+   * scoped to. Server-held rather than client-supplied on each request, so a
+   * document cannot be moved out of a protected folder by claiming it was
+   * somewhere else all along.
+   */
+  path: string;
+  /** The actor who first wrote it. Creators keep access to their own notes. */
+  createdBy?: string;
+  /** The actor who last wrote it, as observed - never as claimed. */
+  updatedBy?: string;
 }
 
 const NS = 'sync';

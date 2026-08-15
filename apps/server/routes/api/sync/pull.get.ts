@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, getQuery } from 'h3';
 
 import { trackEvents } from '~/utils/analytics';
-import { requireVaultId } from '~/utils/auth';
+import { requireMember } from '~/utils/auth';
 import type { Entity } from '@unimem/types';
 import {
   getEntitiesAfter,
@@ -17,7 +17,8 @@ interface PullResponse {
 
 export default defineEventHandler(async (event): Promise<PullResponse> => {
   const startedAt = Date.now();
-  const vaultId = await requireVaultId(event);
+  const member = await requireMember(event);
+  const vaultId = member.vaultId;
 
   const query = getQuery(event);
   const clientId = query.clientId as string;

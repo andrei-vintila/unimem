@@ -72,3 +72,4 @@ coverage/
 
 # Nitro dev storage - the sync server's vaults while developing locally
 .data/
+.test-dist/

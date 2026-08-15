@@ -211,6 +211,22 @@ export class OkfStorageAdapter implements StorageAdapter {
     return this.index.getStats();
   }
 
+  /**
+   * Entity id -> bundle-relative path, for the sync manager to send on push.
+   *
+   * The server scopes write grants by folder, so it has to know where a
+   * document sits. It verifies the claim against the entity's type rather than
+   * trusting it, so this is a hint that can only ever narrow what we are
+   * allowed to do, never widen it.
+   */
+  entityPaths(): Record<string, string> {
+    const paths: Record<string, string> = {};
+    for (const [resource, path] of this.paths) {
+      paths[resource.replace('unimem://entity/', '')] = path;
+    }
+    return paths;
+  }
+
   // ---------------------------------------------------------------------------
   // Private
   // ---------------------------------------------------------------------------

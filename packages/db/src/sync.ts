@@ -44,6 +44,14 @@ export interface SyncManagerConfig {
   client: SqlDatabase;
   replication: ReplicationConfig;
   clientId: string;
+  /**
+   * Where each entity lives in the bundle, by id.
+   *
+   * The server scopes write grants by folder, so it needs to know where a
+   * document sits - though it verifies the claim rather than trusting it, and
+   * an entity whose path is unknown is simply scoped to its type's folder.
+   */
+  paths?: () => Record<string, string>;
 }
 
 // -----------------------------------------------------------------------------
@@ -88,11 +96,15 @@ export class SyncManager {
   private client: SqlDatabase;
   private config: ReplicationConfig;
   private clientId: string;
+  private paths: () => Record<string, string>;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private eventHandlers: Set<SyncEventHandler> = new Set();
 
   /** Cursor: the latest server version we have pulled so far. */
   private lastSyncVersion = '0';
+
+  /** Writes the server refused on the last push, for the UI to surface. */
+  private rejections: Array<{ entityId: string; reason: string }> = [];
 
   private state: SyncState = {
     status: 'synced',
@@ -104,6 +116,7 @@ export class SyncManager {
     this.client = config.client;
     this.config = config.replication;
     this.clientId = config.clientId;
+    this.paths = config.paths ?? (() => ({}));
   }
 
   // ---------------------------------------------------------------------------
@@ -173,6 +186,16 @@ export class SyncManager {
 
   getState(): SyncState {
     return this.state;
+  }
+
+  /**
+   * Changes the server would not accept, from the last push.
+   *
+   * Distinct from a conflict: a conflict is two people editing the same thing,
+   * a rejection is being told this is not yours to edit.
+   */
+  getRejections(): Array<{ entityId: string; reason: string }> {
+    return this.rejections;
   }
 
   // ---------------------------------------------------------------------------
@@ -294,6 +317,7 @@ export class SyncManager {
         clientId: this.clientId,
         entities,
         lastSyncVersion: this.lastSyncVersion,
+        paths: this.paths(),
       }),
     });
 
@@ -305,7 +329,22 @@ export class SyncManager {
       success: boolean;
       syncVersion: string;
       conflicts: Array<{ entityId: string; serverVersion: Entity }>;
+      rejected?: Array<{ entityId: string; reason: string }>;
+      actor?: string;
     };
+
+    // Writes the server refused because this member has no access to the
+    // folder. They must not be marked synced: the change is still only here,
+    // and silently flipping it to 'synced' would drop it at the next rebuild
+    // while telling the user everything was fine.
+    const rejected = result.rejected ?? [];
+    for (const refusal of rejected) {
+      console.warn(
+        `[SyncManager] Server refused ${refusal.entityId}: ${refusal.reason}`
+      );
+      this.emit('sync:rejected', refusal);
+    }
+    this.rejections = rejected;
 
     // Log conflicts to sync_log for later resolution.
     //
@@ -331,10 +370,13 @@ export class SyncManager {
       this.emit('sync:conflict', conflict);
     }
 
-    // Mark non-conflicting entities as synced
-    const conflictIds = new Set(result.conflicts.map((c) => c.entityId));
+    // Mark accepted entities as synced
+    const settled = new Set([
+      ...result.conflicts.map((c) => c.entityId),
+      ...rejected.map((r) => r.entityId),
+    ]);
     for (const entity of entities) {
-      if (!conflictIds.has(entity.id)) {
+      if (!settled.has(entity.id)) {
         await this.client.execute(
           `UPDATE entities
            SET sync_status = 'synced', sync_version = $1

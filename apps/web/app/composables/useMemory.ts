@@ -138,7 +138,10 @@ export function useMemory() {
       stats.value = await memoryEngine.getStats();
 
       // Sync starts itself if this device has a server and token configured.
-      useSync().attach(dbClient);
+      useSync().attach(
+        dbClient,
+        storageAdapter instanceof OkfStorageAdapter ? storageAdapter : undefined
+      );
 
       isInitialized.value = true;
 
