@@ -2,7 +2,8 @@ import { createError, defineEventHandler, readBody } from 'h3';
 
 import { trackEvents } from '~/utils/analytics';
 import { requireMember } from '~/utils/auth';
-import { decideWrite } from '~/utils/authz';
+import { decideWrite, resolvePath } from '~/utils/authz';
+import { putRequest, requestId } from '~/utils/changeRequests';
 import type { Entity } from '@unimem/types';
 import {
   getStoredEntity,
@@ -27,10 +28,15 @@ interface PushResponse {
     entityId: string;
     serverVersion: Entity;
   }>;
-  /** Writes refused because the member lacks access to the folder. */
+  /**
+   * Writes the member could not apply directly. Each is kept as a change
+   * request for someone who can write there to accept or decline, so the work
+   * is proposed rather than lost.
+   */
   rejected: Array<{
     entityId: string;
     reason: string;
+    requestId: string;
   }>;
   /** Who the server believes is writing, whatever the client claimed. */
   actor: string;
@@ -67,7 +73,26 @@ export default defineEventHandler(async (event): Promise<PushResponse> => {
     });
 
     if (!decision.allowed) {
-      rejected.push({ entityId: entity.id, reason: decision.reason });
+      // Filed as a proposal rather than discarded. The id is derived from the
+      // document and the proposer, so a client that keeps pushing an
+      // unaccepted change refreshes its own request instead of filing a new
+      // one on every sync.
+      const id = requestId(entity.id, member.actor);
+
+      await putRequest(member.vaultId, {
+        id,
+        entityId: entity.id,
+        // Where it would go if accepted. Falls back to the document's own
+        // folder when the claim was the thing that was wrong.
+        path: resolvePath(entity, body.paths?.[entity.id]) ?? `${entity.type}/`,
+        entity,
+        proposedBy: member.actor,
+        proposedAt: new Date().toISOString(),
+        status: 'open',
+        reason: decision.reason,
+      });
+
+      rejected.push({ entityId: entity.id, reason: decision.reason, requestId: id });
       continue;
     }
 

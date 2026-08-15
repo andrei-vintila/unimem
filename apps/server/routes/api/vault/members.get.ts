@@ -4,23 +4,31 @@ import { requireMember } from '~/utils/auth';
 import { listMembers } from '~/utils/membership';
 
 /**
- * Who shares this vault, and what each of them may write.
+ * Who shares this vault.
  *
- * Readable by any member rather than only the owner: in a vault several people
- * write to, knowing who else can change a folder is part of using it, not an
- * administrative privilege. No token or hash is returned.
+ * Any member may see who else is here - knowing who to send a change request
+ * to is part of using a shared vault, not an administrative privilege. But
+ * only the owner sees everyone's grants: a grant names folders, and a folder
+ * this member cannot read is one they should not learn the name of. No token
+ * or hash is ever returned.
  */
 export default defineEventHandler(async (event) => {
-  const member = await requireMember(event);
-  const members = await listMembers(member.vaultId);
+  const requester = await requireMember(event);
+  const members = await listMembers(requester.vaultId);
+  const isOwner = requester.role === 'owner';
 
   return {
-    you: { actor: member.actor, role: member.role, write: member.write },
+    you: {
+      actor: requester.actor,
+      role: requester.role,
+      write: requester.write,
+      read: requester.read ?? [''],
+    },
     members: members.map((entry) => ({
       actor: entry.actor,
       role: entry.role,
-      write: entry.write,
       createdAt: entry.createdAt,
+      ...(isOwner ? { write: entry.write, read: entry.read ?? [''] } : {}),
     })),
   };
 });

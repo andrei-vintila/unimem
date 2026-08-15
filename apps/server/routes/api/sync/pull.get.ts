@@ -2,6 +2,7 @@ import { createError, defineEventHandler, getQuery } from 'h3';
 
 import { trackEvents } from '~/utils/analytics';
 import { requireMember } from '~/utils/auth';
+import { canReadPath } from '~/utils/authz';
 import type { Entity } from '@unimem/types';
 import {
   getEntitiesAfter,
@@ -36,7 +37,8 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     vaultId,
     since,
     clientId,
-    limit
+    limit,
+    (path) => canReadPath(member, path)
   );
 
   const entities = items.map((stored) => stored.entity);

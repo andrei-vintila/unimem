@@ -212,6 +212,39 @@ export class OkfStorageAdapter implements StorageAdapter {
   }
 
   /**
+   * Write a document that arrived from the server into the bundle.
+   *
+   * Distinct from `create`/`update`, and deliberately so: this is not a local
+   * change. It must not be stamped with this device's actor - the authorship
+   * came with it - and it must not be marked pending, or the vault would push
+   * back everything it just pulled. Sync state stays the sync manager's to
+   * manage; this only makes the files agree with it.
+   *
+   * Without this the bundle would never see a remote change at all, and every
+   * rebuild would silently discard whatever had been pulled since the last one.
+   */
+  async applyRemote(entity: Entity): Promise<void> {
+    if (entity.deletedAt) {
+      const resource = `unimem://entity/${entity.id}`;
+      await appendDeletion(
+        this.fs,
+        this.root,
+        {
+          id: entity.id,
+          title: entity.title,
+          deletedAt: new Date(entity.deletedAt),
+          ...(entity.updatedBy ? { deletedBy: entity.updatedBy } : {}),
+        },
+        this.paths.get(resource)
+      );
+      this.paths.delete(resource);
+      return;
+    }
+
+    await this.writeToBundle(entity);
+  }
+
+  /**
    * Entity id -> bundle-relative path, for the sync manager to send on push.
    *
    * The server scopes write grants by folder, so it has to know where a

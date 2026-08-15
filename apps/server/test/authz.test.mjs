@@ -9,7 +9,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { decideWrite, grantCovers, resolvePath } from '../.test-dist/utils/authz.js';
+import {
+  canReadPath,
+  canWritePath,
+  decideWrite,
+  effectiveRead,
+  grantCovers,
+  resolvePath,
+} from '../.test-dist/utils/authz.js';
 
 function member(write, overrides = {}) {
   return {
@@ -172,4 +179,71 @@ test('a member with no grants writes nothing', () => {
   });
 
   assert.equal(decision.allowed, false);
+});
+
+// -----------------------------------------------------------------------------
+// Reads
+// -----------------------------------------------------------------------------
+
+test('write implies read, always', () => {
+  // Otherwise a member could be asked to resolve a conflict against a document
+  // they are not allowed to see, and would overwrite work never shown to them.
+  const sam = member(['project/'], { read: [] });
+
+  assert.ok(canReadPath(sam, 'project/a.md'));
+  assert.deepEqual(effectiveRead(sam).sort(), ['project/']);
+});
+
+test('read grants extend beyond what a member can write', () => {
+  const kit = member(['task/'], { read: ['person/'] });
+
+  assert.ok(canReadPath(kit, 'person/ada.md'), 'may look at people');
+  assert.ok(canReadPath(kit, 'task/x.md'), 'and at their own folder');
+  assert.equal(canReadPath(kit, 'project/secret.md'), false);
+
+  // Reading is not writing.
+  assert.equal(canWritePath(kit, 'person/ada.md'), false);
+});
+
+test('a member with no read grants sees only what they write', () => {
+  const narrow = member(['area/'], { read: [] });
+
+  assert.ok(canReadPath(narrow, 'area/health.md'));
+  assert.equal(canReadPath(narrow, 'person/ada.md'), false);
+  assert.equal(canReadPath(narrow, 'project/x.md'), false);
+});
+
+test('a record predating scoped reads keeps the whole vault', () => {
+  // `read` absent means the member was granted before reads were scoped, and
+  // already had everything. Narrowing them silently would lock them out of
+  // their own vault on upgrade.
+  const legacy = member(['project/']);
+  delete legacy.read;
+
+  assert.ok(canReadPath(legacy, 'person/ada.md'));
+  assert.ok(canReadPath(legacy, 'anything/at/all.md'));
+});
+
+test('a rejection does not name a folder the member cannot read', () => {
+  // Otherwise entity ids could be probed to map out the hidden vault.
+  const outsider = member(['task/'], { read: ['task/'] });
+
+  const hidden = decideWrite({
+    member: outsider,
+    entity: entity('project'),
+    claimedPath: 'project/x.md',
+    stored: { path: 'project/internal/secret.md' },
+  });
+  assert.equal(hidden.allowed, false);
+  assert.doesNotMatch(hidden.reason, /internal/, 'must not name the folder');
+
+  // A folder they can see is named, because that is useful and costs nothing.
+  const visible = member(['task/'], { read: ['project/'] });
+  const shown = decideWrite({
+    member: visible,
+    entity: entity('project'),
+    claimedPath: 'project/x.md',
+    stored: { path: 'project/internal/secret.md' },
+  });
+  assert.match(shown.reason, /project\/internal\//);
 });

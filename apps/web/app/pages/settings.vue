@@ -232,11 +232,12 @@ async function applySyncSettings() {
           <p class="text-sm font-medium">
             {{ rejections.length }}
             {{ rejections.length === 1 ? 'change was' : 'changes were' }}
-            not accepted
+            sent for review
           </p>
           <p class="text-sm text-[var(--color-muted)] mt-1">
-            These are still saved here, but the server would not take them —
-            your account does not have write access to those folders.
+            You do not have write access to those folders, so these were kept
+            as change requests. They stay here either way — someone who can
+            write there decides whether they land.
           </p>
           <ul class="mt-2 space-y-1">
             <li
@@ -273,6 +274,8 @@ async function applySyncSettings() {
         </dl>
       </div>
     </section>
+
+    <ChangeRequests />
 
     <section>
       <h2 class="text-xl font-semibold mb-4">About</h2>

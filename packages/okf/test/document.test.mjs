@@ -170,3 +170,18 @@ test('serialized documents are conformant and stable', () => {
   // Byte-stable output keeps a save that changed nothing out of everyone's diff.
   assert.equal(first, second);
 });
+
+test('an entity that has been through JSON still serialises', () => {
+  // What arrives from the sync server: Dates are strings, because JSON has no
+  // Date. The bundle is written from exactly these, so assuming otherwise
+  // loses every document that came from another device.
+  const overWire = JSON.parse(JSON.stringify(person()));
+
+  const doc = entityToDocument(overWire);
+  assert.equal(doc.frontmatter.timestamp, '2026-08-15T10:00:00.000Z');
+  assert.equal(doc.frontmatter.created_at, '2026-08-01T09:00:00.000Z');
+
+  const back = documentToEntity(parseDocument(serializeDocument(doc)), FALLBACK);
+  assert.equal(back.title, 'Ada Lovelace');
+  assert.ok(back.updatedAt instanceof Date);
+});

@@ -79,6 +79,25 @@ export function canWritePath(member: Member, path: string): boolean {
   return member.write.some((grant) => grantCovers(grant, path));
 }
 
+/**
+ * What this member may read.
+ *
+ * Write implies read, always. A member who could change a document without
+ * being able to see it would be asked to resolve conflicts against something
+ * invisible, and would overwrite work they were never shown.
+ *
+ * A record with no `read` predates scoped reads and keeps the whole vault, as
+ * it already had.
+ */
+export function effectiveRead(member: Member): string[] {
+  if (member.read === undefined) return [GRANT_ALL];
+  return [...member.read, ...member.write];
+}
+
+export function canReadPath(member: Member, path: string): boolean {
+  return effectiveRead(member).some((grant) => grantCovers(grant, path));
+}
+
 // -----------------------------------------------------------------------------
 // Decisions
 // -----------------------------------------------------------------------------
@@ -123,9 +142,13 @@ export function decideWrite({
   // Where it already is. Without this, a member could take a document out of a
   // folder they cannot write by pushing it back under one they can.
   if (stored && !canWritePath(member, stored.path) && !isCreator) {
+    // Naming the folder would otherwise let someone probe entity ids and map
+    // out the parts of the vault they cannot see.
     return {
       allowed: false,
-      reason: `No write access to ${folderOf(stored.path)}`,
+      reason: canReadPath(member, stored.path)
+        ? `No write access to ${folderOf(stored.path)}`
+        : 'No write access to this document',
     };
   }
 

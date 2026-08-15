@@ -133,8 +133,11 @@ export function entityToDocument(entity: Entity): OkfDocument {
     type: entity.type,
     title: entity.title,
     resource: resourceForId(entity.id),
-    timestamp: entity.updatedAt.toISOString(),
-    created_at: entity.createdAt.toISOString(),
+    // Coerced rather than assumed: an entity that arrived over the wire has
+    // been through JSON, where a Date is a string. This is the boundary where
+    // that difference has to stop mattering.
+    timestamp: toIso(entity.updatedAt),
+    created_at: toIso(entity.createdAt),
     memory_layer: entity.memoryLayer,
   };
 
@@ -161,6 +164,11 @@ export function entityToDocument(entity: Entity): OkfDocument {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
+
+/** ISO 8601, from a Date or from whatever JSON left in its place. */
+function toIso(value: unknown): string {
+  return (toDate(value) ?? new Date()).toISOString();
+}
 
 function headingOf(body: string): string | null {
   return /^#\s+(.+)$/m.exec(body)?.[1]?.trim() ?? null;

@@ -58,6 +58,9 @@ export function useSync() {
       // Read at push time rather than captured: a document that moved since
       // the manager was built must be scoped where it is now.
       paths: () => store?.entityPaths() ?? {},
+      // Only where a bundle is the store. In the browser the index is the
+      // store, and there is nothing else to write.
+      ...(store ? { applyRemote: (entity) => store!.applyRemote(entity) } : {}),
       replication: {
         enabled: true,
         serverUrl: settings.serverUrl.value,

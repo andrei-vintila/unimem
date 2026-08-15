@@ -13,14 +13,21 @@ interface InvitePayload {
   /**
    * Bundle path prefixes they may write: `project/` is a folder and, because a
    * bundle's top-level folder is its entity type, also "all projects".
-   * Omit for a read-only member.
+   * Omit to let them only propose changes rather than make them.
    */
   write?: string[];
+  /**
+   * Path prefixes they may read. Defaults to what they can write, so an invite
+   * that says nothing about reading grants the least that still works rather
+   * than the whole vault. Pass `[""]` for a member who should see everything.
+   */
+  read?: string[];
 }
 
 interface InviteResponse {
   actor: string;
   write: string[];
+  read: string[];
   /**
    * Shown once. Only its hash is stored, so it cannot be recovered - which is
    * also what stops a leaked backup of the member store from being a set of
@@ -43,6 +50,10 @@ export default defineEventHandler(async (event): Promise<InviteResponse> => {
   }
 
   const write = Array.isArray(body.write) ? body.write.filter(isGrant) : [];
+  // Recorded explicitly even when defaulted, so that an absent `read` only
+  // ever means "written before reads were scoped" and never "granted today
+  // and left open".
+  const read = Array.isArray(body.read) ? body.read.filter(isGrant) : [...write];
 
   const token = generateMemberToken();
   await putMember(await hashToken(token), {
@@ -50,10 +61,11 @@ export default defineEventHandler(async (event): Promise<InviteResponse> => {
     actor: body.actor,
     role: 'member',
     write,
+    read,
     createdAt: new Date().toISOString(),
   });
 
-  return { actor: body.actor, write, token };
+  return { actor: body.actor, write, read, token };
 });
 
 /**

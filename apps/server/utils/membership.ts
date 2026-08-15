@@ -37,6 +37,16 @@ export interface Member {
    * `'project/internal/'` is a subfolder within it.
    */
   write: string[];
+  /**
+   * Path prefixes this member may read. Write access implies read, so this
+   * only ever adds to what `write` already reaches.
+   *
+   * Absent on records written before reads were scoped, and treated as the
+   * whole vault - which is what those members already had. New invites always
+   * record it explicitly, so the permissive reading applies to nothing that
+   * was granted after the fact.
+   */
+  read?: string[];
   createdAt: string;
 }
 

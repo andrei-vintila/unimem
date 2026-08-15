@@ -52,6 +52,15 @@ export interface SyncManagerConfig {
    * an entity whose path is unknown is simply scoped to its type's folder.
    */
   paths?: () => Record<string, string>;
+  /**
+   * Persist a document that arrived from the server into the store.
+   *
+   * On a surface whose store is the markdown bundle, the index alone is not
+   * where the vault lives - a pulled change that only reached the index would
+   * be discarded by the next rebuild. Omit on a surface where the index *is*
+   * the store, such as the browser.
+   */
+  applyRemote?: (entity: Entity) => Promise<void>;
 }
 
 // -----------------------------------------------------------------------------
@@ -97,14 +106,22 @@ export class SyncManager {
   private config: ReplicationConfig;
   private clientId: string;
   private paths: () => Record<string, string>;
+  private applyRemote?: (entity: Entity) => Promise<void>;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private eventHandlers: Set<SyncEventHandler> = new Set();
 
   /** Cursor: the latest server version we have pulled so far. */
   private lastSyncVersion = '0';
 
-  /** Writes the server refused on the last push, for the UI to surface. */
-  private rejections: Array<{ entityId: string; reason: string }> = [];
+  /** Documents that arrived but could not be stored locally. */
+  private skipped: Array<{ entityId: string; reason: string }> = [];
+
+  /** Writes the server turned into change requests, for the UI to surface. */
+  private rejections: Array<{
+    entityId: string;
+    reason: string;
+    requestId?: string;
+  }> = [];
 
   private state: SyncState = {
     status: 'synced',
@@ -117,6 +134,7 @@ export class SyncManager {
     this.config = config.replication;
     this.clientId = config.clientId;
     this.paths = config.paths ?? (() => ({}));
+    this.applyRemote = config.applyRemote;
   }
 
   // ---------------------------------------------------------------------------
@@ -194,8 +212,14 @@ export class SyncManager {
    * Distinct from a conflict: a conflict is two people editing the same thing,
    * a rejection is being told this is not yours to edit.
    */
-  getRejections(): Array<{ entityId: string; reason: string }> {
+  getRejections(): Array<{ entityId: string; reason: string; requestId?: string }> {
     return this.rejections;
+  }
+
+  /** Documents the last pull could not store. Separate from a rejection: this
+   * one is our fault, or the sender's, rather than a permission decision. */
+  getSkipped(): Array<{ entityId: string; reason: string }> {
+    return this.skipped;
   }
 
   // ---------------------------------------------------------------------------
@@ -329,14 +353,15 @@ export class SyncManager {
       success: boolean;
       syncVersion: string;
       conflicts: Array<{ entityId: string; serverVersion: Entity }>;
-      rejected?: Array<{ entityId: string; reason: string }>;
+      rejected?: Array<{ entityId: string; reason: string; requestId?: string }>;
       actor?: string;
     };
 
-    // Writes the server refused because this member has no access to the
-    // folder. They must not be marked synced: the change is still only here,
-    // and silently flipping it to 'synced' would drop it at the next rebuild
-    // while telling the user everything was fine.
+    // Writes the server would not apply directly. They are not lost: the
+    // server keeps each as a change request for someone who can write there.
+    // Locally they become 'proposed' rather than 'synced' - the change is
+    // still only here until somebody accepts it - and rather than 'pending',
+    // which would re-push them on every cycle and count them as unsaved work.
     const rejected = result.rejected ?? [];
     for (const refusal of rejected) {
       console.warn(
@@ -370,6 +395,13 @@ export class SyncManager {
       this.emit('sync:conflict', conflict);
     }
 
+    for (const refusal of rejected) {
+      await this.client.execute(
+        `UPDATE entities SET sync_status = 'proposed' WHERE id = $1`,
+        [refusal.entityId]
+      );
+    }
+
     // Mark accepted entities as synced
     const settled = new Set([
       ...result.conflicts.map((c) => c.entityId),
@@ -394,6 +426,8 @@ export class SyncManager {
   private async pullChanges(): Promise<void> {
     const serverUrl = this.config.serverUrl!;
 
+    this.skipped = [];
+
     let hasMore = true;
     let cursor = this.lastSyncVersion;
 
@@ -417,7 +451,22 @@ export class SyncManager {
       };
 
       for (const entity of result.entities) {
-        await this.upsertRemoteEntity(entity, result.syncVersion);
+        try {
+          await this.upsertRemoteEntity(entity, result.syncVersion);
+        } catch (error) {
+          // One unusable document must not stop the vault from syncing. In a
+          // vault several people write to, aborting the cycle would let a
+          // single malformed push from any contributor block everyone else's
+          // changes indefinitely - and the cursor would never advance past it.
+          console.error(
+            `[SyncManager] Skipping ${entity.id}:`,
+            error instanceof Error ? error.message : error
+          );
+          this.skipped.push({
+            entityId: String(entity.id),
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       // A cursor that does not move means the next request would return this
@@ -454,8 +503,11 @@ export class SyncManager {
 
     const deletedAt = entity.deletedAt ? new Date(entity.deletedAt) : null;
 
+    let applied = false;
+
     if (existing.rows.length === 0) {
       // Insert
+      applied = true;
       await this.client.execute(
         `INSERT INTO entities
            (id, type, memory_layer, title, content, embedding, metadata,
@@ -484,6 +536,7 @@ export class SyncManager {
       ).getTime();
 
       if (remoteUpdatedMs > localUpdatedMs) {
+        applied = true;
         await this.client.execute(
           `UPDATE entities
            SET type=$1, memory_layer=$2, title=$3, content=$4,
@@ -507,6 +560,14 @@ export class SyncManager {
           ]
         );
       }
+    }
+
+    // The index is not the store on every surface. Where the vault is markdown
+    // on disk, a change that only reached the index would be thrown away by
+    // the next rebuild - so the files are brought into line here, and only for
+    // changes actually accepted by the comparison above.
+    if (applied && this.applyRemote) {
+      await this.applyRemote(entity);
     }
   }
 

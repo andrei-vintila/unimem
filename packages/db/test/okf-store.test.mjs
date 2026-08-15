@@ -249,3 +249,58 @@ test('hand-written documents are claimed so their identity stops moving', async 
   assert.equal(afterRename.id, claimed.id, 'same entity, renamed file');
   assert.equal((await adapter.query({ types: ['task'] })).length, 1, 'not duplicated');
 });
+
+test('a change pulled from the server reaches the files, not just the index', async () => {
+  const { adapter, root } = await createStore();
+
+  // What the sync manager hands over: an entity from another device, already
+  // through JSON, so its dates are strings.
+  const remote = JSON.parse(
+    JSON.stringify(person({ title: 'Ada From Elsewhere', createdBy: 'human:sam' }))
+  );
+  await adapter.applyRemote(remote);
+
+  const raw = await fs.readFile(path.join(root, 'person', 'ada-from-elsewhere.md'), 'utf8');
+  assert.match(raw, /^title: Ada From Elsewhere$/m);
+  assert.match(raw, /^author: human:sam$/m, 'the sender keeps authorship');
+
+  // The point of the whole arrangement: it has to survive losing the index.
+  await adapter.rebuild();
+  const titles = (await adapter.query({})).map((e) => e.title);
+  assert.deepEqual(titles, ['Ada From Elsewhere']);
+});
+
+test('a deletion pulled from the server removes the file and logs it', async () => {
+  const { adapter, root } = await createStore();
+  await adapter.create(person());
+
+  await adapter.applyRemote(
+    JSON.parse(
+      JSON.stringify(
+        person({ deletedAt: new Date('2026-08-16T12:00:00Z'), updatedBy: 'human:sam' })
+      )
+    )
+  );
+
+  assert.deepEqual(await fs.readdir(path.join(root, 'person')), []);
+  const log = await fs.readFile(path.join(root, 'log.md'), 'utf8');
+  assert.match(log, /\*\*Deletion\*\*/);
+  assert.match(log, /human:sam/, 'attributed to whoever deleted it, not to us');
+
+  await adapter.rebuild();
+  assert.equal(await adapter.read(person().id), null, 'stays deleted');
+});
+
+test('applying a remote change does not queue it for pushing back', async () => {
+  const { adapter, client } = await createStore();
+
+  await adapter.applyRemote(JSON.parse(JSON.stringify(person())));
+
+  // applyRemote writes the file; the sync manager owns the index row. What
+  // must not happen is the vault treating a pulled change as a local one.
+  await adapter.rebuild();
+  const pending = await client.execute(
+    `SELECT count(*) AS n FROM entities WHERE sync_status = 'pending'`
+  );
+  assert.equal(Number(pending.rows[0].n), 0);
+});
