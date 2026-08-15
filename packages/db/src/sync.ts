@@ -125,7 +125,7 @@ export class SyncManager {
   // ---------------------------------------------------------------------------
 
   async sync(): Promise<SyncState> {
-    this.updateState({ status: 'syncing' } as Partial<SyncState>);
+    this.updateState({ status: 'syncing' });
     this.emit('sync:started', { clientId: this.clientId });
 
     try {

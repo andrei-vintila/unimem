@@ -15,7 +15,7 @@
     "package:desktop": "pnpm --filter @unimem/desktop package",
     "build:server": "pnpm --filter @unimem/server build",
     "build:obsidian": "pnpm --filter @unimem/obsidian-plugin build",
-    "typecheck": "tsc --noEmit && pnpm -r typecheck",
+    "typecheck": "pnpm run build:packages && tsc --noEmit && pnpm -r typecheck",
     "clean": "rm -rf node_modules packages/*/dist packages/*/node_modules apps/*/dist apps/*/.output apps/*/.nuxt apps/*/node_modules plugins/*/main.js plugins/*/node_modules"
   },
   "keywords": [
