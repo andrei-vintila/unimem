@@ -1,11 +1,13 @@
 import { createError, defineEventHandler, readBody } from 'h3';
 
 import { trackEvents } from '~/utils/analytics';
+import { requireVaultId } from '~/utils/auth';
 import type { Entity } from '@unimem/types';
 import {
   getStoredEntity,
   setStoredEntity,
   generateVersion,
+  parseCursor,
   versionIsAfter,
 } from '~/utils/syncStore';
 
@@ -26,6 +28,7 @@ interface PushResponse {
 
 export default defineEventHandler(async (event): Promise<PushResponse> => {
   const startedAt = Date.now();
+  const vaultId = await requireVaultId(event);
   const body = await readBody<PushPayload>(event);
 
   // h3 v2 resolves `readBody` to `T | undefined`; see the note in embed.post.ts.
@@ -37,36 +40,35 @@ export default defineEventHandler(async (event): Promise<PushResponse> => {
   }
 
   const newVersion = generateVersion();
+  const seenAt = parseCursor(body.lastSyncVersion).version;
   const conflicts: PushResponse['conflicts'] = [];
 
   for (const entity of body.entities) {
     if (!entity.id) continue;
 
-    const stored = await getStoredEntity(entity.id);
+    const stored = await getStoredEntity(vaultId, entity.id);
 
     if (stored && stored.clientId !== body.clientId) {
       // Another client owns the last write. Conflict if the server version
       // is newer than the pushing client's last sync point.
-      if (versionIsAfter(stored.serverVersion, body.lastSyncVersion || '0')) {
+      if (versionIsAfter(stored.serverVersion, seenAt)) {
         conflicts.push({ entityId: entity.id, serverVersion: stored.entity });
         continue;
       }
     }
 
-    // No conflict – persist the entity
-    await setStoredEntity(entity.id, {
+    // No conflict - persist the entity
+    await setStoredEntity(vaultId, entity.id, {
       entity,
       serverVersion: newVersion,
       clientId: body.clientId,
     });
   }
 
-  console.log(`[Sync] Push from ${body.clientId}: ${body.entities.length} entities, ${conflicts.length} conflicts`);
-
   // Counts and timing only. The entities themselves are the user's notes.
   trackEvents(
     event,
-    body.clientId,
+    vaultId,
     {
       name: 'sync_started',
       properties: { direction: 'push', entity_count: body.entities.length },

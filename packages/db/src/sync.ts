@@ -12,9 +12,17 @@
 //        ?clientId=…&lastSyncVersion=…&limit=…
 //        → { entities: Entity[], syncVersion, hasMore }
 //
-// The client maintains `lastSyncVersion` in memory (survives across periodic
-// syncs within a session).  On a fresh page load the cursor starts at '0',
-// which causes a full pull – intentionally safe.
+// Every request carries the sync token as a bearer header; the server resolves
+// it to a vault, and a request without one reaches nothing.
+//
+// `lastSyncVersion` is an opaque cursor - currently "<serverMs>|<entityId>",
+// because a push stamps a whole batch with one millisecond and the entity ID is
+// what breaks the tie. Treat it as opaque here: the server owns its shape, and
+// this client only ever echoes back what it was last handed.
+//
+// The cursor lives in memory (surviving periodic syncs within a session). On a
+// fresh page load it starts at '0', which causes a full pull - intentionally
+// safe.
 // =============================================================================
 
 import type {
@@ -26,14 +34,14 @@ import type {
   ReplicationConfig,
   MemoryEvent,
 } from '@unimem/types';
-import type { DatabaseClient } from './client';
+import type { SqlDatabase } from './client.js';
 
 // -----------------------------------------------------------------------------
 // Configuration
 // -----------------------------------------------------------------------------
 
 export interface SyncManagerConfig {
-  client: DatabaseClient;
+  client: SqlDatabase;
   replication: ReplicationConfig;
   clientId: string;
 }
@@ -55,6 +63,11 @@ function rowToEntity(row: Record<string, unknown>): Entity {
     tags: (row.tags as string[]) ?? [],
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
+    // Carried explicitly: a tombstone that lost this field on the way out
+    // would arrive at the other devices as an ordinary edit.
+    ...(row.deleted_at
+      ? { deletedAt: new Date(row.deleted_at as string) }
+      : {}),
   };
 
   const metadata = row.metadata as Record<string, unknown> | null;
@@ -72,7 +85,7 @@ function rowToEntity(row: Record<string, unknown>): Entity {
 type SyncEventHandler = (event: MemoryEvent) => void;
 
 export class SyncManager {
-  private client: DatabaseClient;
+  private client: SqlDatabase;
   private config: ReplicationConfig;
   private clientId: string;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
@@ -100,6 +113,11 @@ export class SyncManager {
   async start(): Promise<void> {
     if (!this.config.enabled || !this.config.serverUrl) {
       console.log('[SyncManager] Sync disabled or no server URL configured');
+      return;
+    }
+
+    if (!this.config.authToken) {
+      console.log('[SyncManager] No sync token configured');
       return;
     }
 
@@ -168,11 +186,18 @@ export class SyncManager {
       ORDER BY timestamp DESC
     `);
 
-    return (result.rows as Array<Record<string, unknown>>).map((row) => ({
-      entityId: row.entity_id as string,
-      localVersion: row.payload as SyncConflict['localVersion'],
-      remoteVersion: row.payload as SyncConflict['remoteVersion'],
-    }));
+    return (result.rows as Array<Record<string, unknown>>).map((row) => {
+      const payload = row.payload as {
+        local: SyncConflict['localVersion'] | null;
+        remote: SyncConflict['remoteVersion'];
+      };
+
+      return {
+        entityId: row.entity_id as string,
+        localVersion: payload.local ?? payload.remote,
+        remoteVersion: payload.remote,
+      };
+    });
   }
 
   async resolveConflict(
@@ -251,12 +276,20 @@ export class SyncManager {
     return (result.rows as Array<Record<string, unknown>>).map(rowToEntity);
   }
 
+  /**
+   * The sync token is what selects the vault on the server, so a request
+   * without it reaches nothing - there is no anonymous vault to fall back to.
+   */
+  private authHeaders(): Record<string, string> {
+    return { Authorization: `Bearer ${this.config.authToken}` };
+  }
+
   private async pushChanges(entities: Entity[]): Promise<void> {
     const serverUrl = this.config.serverUrl!;
 
     const response = await fetch(`${serverUrl}/api/sync/push`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
       body: JSON.stringify({
         clientId: this.clientId,
         entities,
@@ -274,14 +307,24 @@ export class SyncManager {
       conflicts: Array<{ entityId: string; serverVersion: Entity }>;
     };
 
-    // Log conflicts to sync_log for later resolution
+    // Log conflicts to sync_log for later resolution.
+    //
+    // Both sides are stored. The local entity is only in hand here, at the
+    // moment of the push - by the time anyone resolves the conflict the row
+    // may have moved on, and a log holding just the server's copy cannot
+    // answer the one question resolution asks: what did these two disagree on?
+    const pushedById = new Map(entities.map((entity) => [entity.id, entity]));
+
     for (const conflict of result.conflicts) {
       await this.client.execute(
         `INSERT INTO sync_log (entity_id, operation, payload, client_id)
          VALUES ($1, 'conflict', $2, $3)`,
         [
           conflict.entityId,
-          JSON.stringify(conflict.serverVersion),
+          JSON.stringify({
+            local: pushedById.get(conflict.entityId) ?? null,
+            remote: conflict.serverVersion,
+          }),
           this.clientId,
         ]
       );
@@ -318,7 +361,9 @@ export class SyncManager {
       url.searchParams.set('lastSyncVersion', cursor);
       url.searchParams.set('limit', '100');
 
-      const response = await fetch(url.toString());
+      const response = await fetch(url.toString(), {
+        headers: this.authHeaders(),
+      });
       if (!response.ok) {
         throw new Error(`Pull failed: ${response.status} ${response.statusText}`);
       }
@@ -333,6 +378,12 @@ export class SyncManager {
         await this.upsertRemoteEntity(entity, result.syncVersion);
       }
 
+      // A cursor that does not move means the next request would return this
+      // same page. Stop rather than spin: the remaining entities come down on
+      // the next sync, and a server old enough to page by timestamp alone
+      // cannot advance past a batch written in a single millisecond.
+      if (result.syncVersion === cursor) break;
+
       cursor = result.syncVersion;
       hasMore = result.hasMore;
     }
@@ -340,7 +391,14 @@ export class SyncManager {
     this.lastSyncVersion = cursor;
   }
 
-  /** Insert or update a remote entity, keeping the newer version. */
+  /**
+   * Insert or update a remote entity, keeping the newer version.
+   *
+   * A tombstone is just an entity carrying `deletedAt`, so it travels the same
+   * path as an edit and wins or loses by the same comparison. Inserting one we
+   * have never seen is deliberate: without the tombstone on record, a later
+   * push from a third device could resurrect the entity here.
+   */
   private async upsertRemoteEntity(
     entity: Entity,
     syncVersion: string
@@ -352,13 +410,16 @@ export class SyncManager {
 
     const remoteUpdatedMs = new Date(entity.updatedAt).getTime();
 
+    const deletedAt = entity.deletedAt ? new Date(entity.deletedAt) : null;
+
     if (existing.rows.length === 0) {
       // Insert
       await this.client.execute(
         `INSERT INTO entities
            (id, type, memory_layer, title, content, embedding, metadata,
-            links, tags, created_at, updated_at, sync_status, sync_version)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'synced',$12)`,
+            links, tags, created_at, updated_at, sync_status, sync_version,
+            deleted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'synced',$12,$13)`,
         [
           entity.id,
           entity.type,
@@ -372,6 +433,7 @@ export class SyncManager {
           entity.createdAt,
           entity.updatedAt,
           syncVersion,
+          deletedAt,
         ]
       );
     } else {
@@ -384,8 +446,9 @@ export class SyncManager {
           `UPDATE entities
            SET type=$1, memory_layer=$2, title=$3, content=$4,
                embedding=$5, metadata=$6, links=$7, tags=$8,
-               updated_at=$9, sync_status='synced', sync_version=$10
-           WHERE id=$11`,
+               updated_at=$9, sync_status='synced', sync_version=$10,
+               deleted_at=$11
+           WHERE id=$12`,
           [
             entity.type,
             entity.memoryLayer,
@@ -397,6 +460,7 @@ export class SyncManager {
             entity.tags ?? [],
             entity.updatedAt,
             syncVersion,
+            deletedAt,
             entity.id,
           ]
         );
@@ -424,7 +488,7 @@ export class SyncManager {
   private extractMetadata(entity: Partial<Entity>): Record<string, unknown> {
     const baseFields = new Set([
       'id', 'type', 'memoryLayer', 'title', 'content',
-      'embedding', 'links', 'tags', 'createdAt', 'updatedAt',
+      'embedding', 'links', 'tags', 'createdAt', 'updatedAt', 'deletedAt',
     ]);
     const meta: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(entity)) {

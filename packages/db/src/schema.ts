@@ -64,12 +64,17 @@ export const entities = pgTable(
     // Sync metadata (for ElectricSQL)
     syncStatus: text('sync_status').default('synced'),
     syncVersion: text('sync_version'),
+
+    // Tombstone. Set instead of deleting the row, so the deletion can be
+    // pushed to other devices; every read filters these out.
+    deletedAt: timestamp('deleted_at'),
   },
   (table) => [
     index('idx_entities_type').on(table.type),
     index('idx_entities_memory_layer').on(table.memoryLayer),
     index('idx_entities_created_at').on(table.createdAt),
     index('idx_entities_updated_at').on(table.updatedAt),
+    index('idx_entities_deleted_at').on(table.deletedAt),
     // Note: Vector similarity index would be:
     // CREATE INDEX ON entities USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
   ]

@@ -15,6 +15,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import {
   IpcChannel,
   toDesktopPlatform,
+  type DbQueryRequest,
   type UnimemDesktopBridge,
 } from '../shared/ipc';
 
@@ -26,6 +27,18 @@ const bridge: UnimemDesktopBridge = {
   getAppDataDir: () => ipcRenderer.invoke(IpcChannel.AppDataDir),
   getDocumentDir: () => ipcRenderer.invoke(IpcChannel.DocumentDir),
   getDatabasePath: () => ipcRenderer.invoke(IpcChannel.DatabasePath),
+
+  db: {
+    // Rebuilt field by field rather than forwarded whole: the renderer's object
+    // is the caller's, and only these three properties belong on the wire.
+    query: (request: DbQueryRequest) =>
+      ipcRenderer.invoke(IpcChannel.DbQuery, {
+        sql: request.sql,
+        params: request.params,
+        rowMode: request.rowMode,
+      }),
+    exec: (sql: string) => ipcRenderer.invoke(IpcChannel.DbExec, sql),
+  },
 };
 
 contextBridge.exposeInMainWorld('unimem', bridge);

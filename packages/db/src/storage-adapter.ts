@@ -2,7 +2,7 @@
 // PGlite Storage Adapter - Implements StorageAdapter from @unimem/core
 // =============================================================================
 
-import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, inArray, gte, lte, isNull, sql } from 'drizzle-orm';
 import type {
   BaseEntity,
   Entity,
@@ -15,17 +15,17 @@ import type {
   MemoryStats,
 } from '@unimem/types';
 import type { StorageAdapter } from '@unimem/core';
-import type { DatabaseClient } from './client';
-import { entities, syncLog, type EntityRow, type NewEntityRow } from './schema';
+import type { SqlDatabase } from './client.js';
+import { entities, syncLog, type EntityRow, type NewEntityRow } from './schema.js';
 
 // -----------------------------------------------------------------------------
 // PGlite Storage Adapter
 // -----------------------------------------------------------------------------
 
 export class PGliteStorageAdapter implements StorageAdapter {
-  private client: DatabaseClient;
+  private client: SqlDatabase;
 
-  constructor(client: DatabaseClient) {
+  constructor(client: SqlDatabase) {
     this.client = client;
   }
 
@@ -48,6 +48,9 @@ export class PGliteStorageAdapter implements StorageAdapter {
       tags: entity.tags,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
+      // Every local write is a change the server has not seen. This is the
+      // only thing that puts a row in SyncManager's push queue.
+      syncStatus: 'pending',
     };
 
     await db.insert(entities).values(row);
@@ -61,7 +64,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
     const rows = await db
       .select()
       .from(entities)
-      .where(eq(entities.id, id))
+      .where(and(eq(entities.id, id), isNull(entities.deletedAt)))
       .limit(1);
 
     if (rows.length === 0) return null;
@@ -74,6 +77,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
 
     const updateData: Partial<NewEntityRow> = {
       updatedAt: new Date(),
+      syncStatus: 'pending',
     };
 
     if (updates.title !== undefined) updateData.title = updates.title;
@@ -103,9 +107,19 @@ export class PGliteStorageAdapter implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * Tombstone, not a row removal: the deletion has to reach the other devices,
+   * and a row that merely vanished here looks to them like one that never
+   * existed. Marked pending so the next sync pushes it.
+   */
   async delete(id: string): Promise<void> {
     const db = this.client.getDb();
-    await db.delete(entities).where(eq(entities.id, id));
+    const now = new Date();
+
+    await db
+      .update(entities)
+      .set({ deletedAt: now, updatedAt: now, syncStatus: 'pending' })
+      .where(eq(entities.id, id));
   }
 
   // ---------------------------------------------------------------------------
@@ -115,7 +129,9 @@ export class PGliteStorageAdapter implements StorageAdapter {
   async query<T extends Entity>(filter: EntityFilter): Promise<T[]> {
     const db = this.client.getDb();
 
-    const conditions = [];
+    // Always first: a tombstone is deleted as far as everything above here
+    // is concerned, whatever else the caller filtered on.
+    const conditions = [isNull(entities.deletedAt)];
 
     if (filter.types && filter.types.length > 0) {
       conditions.push(inArray(entities.type, filter.types));
@@ -143,11 +159,10 @@ export class PGliteStorageAdapter implements StorageAdapter {
       }
     }
 
-    const query = conditions.length > 0
-      ? db.select().from(entities).where(and(...conditions))
-      : db.select().from(entities);
-
-    const rows = await query;
+    const rows = await db
+      .select()
+      .from(entities)
+      .where(and(...conditions));
     return rows.map((row) => this.rowToEntity<T>(row));
   }
 
@@ -197,6 +212,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
       tags: entity.tags,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
+      syncStatus: 'pending',
     }));
 
     await db.insert(entities).values(rows);
@@ -206,7 +222,12 @@ export class PGliteStorageAdapter implements StorageAdapter {
 
   async bulkDelete(ids: string[]): Promise<void> {
     const db = this.client.getDb();
-    await db.delete(entities).where(inArray(entities.id, ids));
+    const now = new Date();
+
+    await db
+      .update(entities)
+      .set({ deletedAt: now, updatedAt: now, syncStatus: 'pending' })
+      .where(inArray(entities.id, ids));
   }
 
   // ---------------------------------------------------------------------------
@@ -216,10 +237,15 @@ export class PGliteStorageAdapter implements StorageAdapter {
   async getStats(): Promise<MemoryStats> {
     const db = this.client.getDb();
 
+    // Tombstones are excluded throughout - the dashboard should never count a
+    // deleted entity just because its row is still present for sync.
+    const alive = isNull(entities.deletedAt);
+
     // Total count
     const totalResult = await db
       .select({ count: sql<number>`count(*)` })
-      .from(entities);
+      .from(entities)
+      .where(alive);
     const totalEntities = Number(totalResult[0]?.count ?? 0);
 
     // By layer
@@ -229,6 +255,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
         count: sql<number>`count(*)`,
       })
       .from(entities)
+      .where(alive)
       .groupBy(entities.memoryLayer);
 
     const byLayer: Record<MemoryLayerType, number> = {
@@ -248,6 +275,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
         count: sql<number>`count(*)`,
       })
       .from(entities)
+      .where(alive)
       .groupBy(entities.type);
 
     const byType: Record<EntityType, number> = {
@@ -267,7 +295,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
     const vectorResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(entities)
-      .where(sql`embedding IS NOT NULL`);
+      .where(and(alive, sql`embedding IS NOT NULL`));
     const vectorCount = Number(vectorResult[0]?.count ?? 0);
 
     // Most recent sync-log entry. Stays undefined on a vault that has never
@@ -325,7 +353,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
     // Extract type-specific fields
     const baseFields = new Set([
       'id', 'type', 'memoryLayer', 'title', 'content',
-      'embedding', 'links', 'tags', 'createdAt', 'updatedAt',
+      'embedding', 'links', 'tags', 'createdAt', 'updatedAt', 'deletedAt',
     ]);
 
     for (const [key, value] of Object.entries(entity)) {
@@ -340,7 +368,7 @@ export class PGliteStorageAdapter implements StorageAdapter {
   private hasMetadataFields(updates: Partial<Entity>): boolean {
     const baseFields = new Set([
       'id', 'type', 'memoryLayer', 'title', 'content',
-      'embedding', 'links', 'tags', 'createdAt', 'updatedAt',
+      'embedding', 'links', 'tags', 'createdAt', 'updatedAt', 'deletedAt',
     ]);
 
     return Object.keys(updates).some((key) => !baseFields.has(key));

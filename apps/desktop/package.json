@@ -18,6 +18,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "icon": "electron scripts/render-icon.mjs"
   },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.5"
+  },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "concurrently": "^10.0.5",

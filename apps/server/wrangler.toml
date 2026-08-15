@@ -22,15 +22,25 @@ SYNC_ENABLED = "true"
 # Secrets - never set here. Provide with:
 #   wrangler secret put NITRO_POSTHOG_KEY
 #   wrangler secret put NITRO_OPENAI_API_KEY
+#
+# NITRO_SYNC_TOKENS is the allowlist of accepted sync tokens (comma-separated).
+# Leaving it unset lets any token open its own vault, which is only safe on a
+# server nobody else can reach - set it on anything internet-facing:
+#   wrangler secret put NITRO_SYNC_TOKENS
 
 # Production environment
 [env.production]
 name = "unimem-sync-prod"
 
-# KV Namespaces (for session storage, caching)
-# [[kv_namespaces]]
-# binding = "CACHE"
-# id = ""
+# KV namespace backing the sync store - every vault lives here. Nitro mounts it
+# as the `sync` storage namespace (see nitro.config.ts); without it the Worker
+# falls back to memory and loses every vault when an isolate recycles.
+#
+# Create it once, then paste the id it prints:
+#   wrangler kv namespace create SYNC_KV
+[[kv_namespaces]]
+binding = "SYNC_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
 # D1 Database (Cloudflare's SQLite)
 # [[d1_databases]]

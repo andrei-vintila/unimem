@@ -69,3 +69,6 @@ coverage/
 # Wrangler local secrets
 .dev.vars
 .wrangler/
+
+# Nitro dev storage - the sync server's vaults while developing locally
+.data/
