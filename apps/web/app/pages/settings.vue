@@ -275,6 +275,8 @@ async function applySyncSettings() {
       </div>
     </section>
 
+    <VaultMembers />
+
     <ChangeRequests />
 
     <section>

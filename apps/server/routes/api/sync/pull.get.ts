@@ -14,6 +14,14 @@ interface PullResponse {
   entities: Entity[];
   syncVersion: string;
   hasMore: boolean;
+  /**
+   * Who the server recognises the caller as.
+   *
+   * Returned here as well as on push because a device with nothing to send
+   * would otherwise never learn its own identity, and would keep writing under
+   * whatever placeholder it invented before it first synced.
+   */
+  actor: string;
 }
 
 export default defineEventHandler(async (event): Promise<PullResponse> => {
@@ -61,5 +69,10 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     }
   );
 
-  return { entities, syncVersion: formatCursor(cursor), hasMore };
+  return {
+    entities,
+    syncVersion: formatCursor(cursor),
+    hasMore,
+    actor: member.actor,
+  };
 });

@@ -113,6 +113,9 @@ export class SyncManager {
   /** Cursor: the latest server version we have pulled so far. */
   private lastSyncVersion = '0';
 
+  /** Who the server says we are. Absent until the first successful push. */
+  private actor: string | null = null;
+
   /** Documents that arrived but could not be stored locally. */
   private skipped: Array<{ entityId: string; reason: string }> = [];
 
@@ -214,6 +217,17 @@ export class SyncManager {
    */
   getRejections(): Array<{ entityId: string; reason: string; requestId?: string }> {
     return this.rejections;
+  }
+
+  /**
+   * Who the server recognises this device as, once it has said so.
+   *
+   * Null before the first push. The client cannot know it in advance: on a
+   * vault nobody has claimed, the identity is assigned at the moment of
+   * claiming it.
+   */
+  getActor(): string | null {
+    return this.actor;
   }
 
   /** Documents the last pull could not store. Separate from a rejection: this
@@ -362,6 +376,11 @@ export class SyncManager {
     // Locally they become 'proposed' rather than 'synced' - the change is
     // still only here until somebody accepts it - and rather than 'pending',
     // which would re-push them on every cycle and count them as unsaved work.
+    // The server decides who we are; the local guess was only ever a
+    // placeholder for the first write. Adopting it keeps one name for one
+    // person, instead of files saying one thing and the server another.
+    if (result.actor) this.actor = result.actor;
+
     const rejected = result.rejected ?? [];
     for (const refusal of rejected) {
       console.warn(
@@ -448,7 +467,11 @@ export class SyncManager {
         entities: Entity[];
         syncVersion: string;
         hasMore: boolean;
+        actor?: string;
       };
+
+      // A device with nothing to push would otherwise never be told who it is.
+      if (result.actor) this.actor = result.actor;
 
       for (const entity of result.entities) {
         try {

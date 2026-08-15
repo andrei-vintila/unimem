@@ -84,6 +84,7 @@ export function useSync() {
       ) {
         syncState.value = syncManager!.getState();
         rejections.value = syncManager!.getRejections();
+        adoptServerActor();
       }
     });
 
@@ -111,6 +112,22 @@ export function useSync() {
     syncNow,
     stop,
   };
+}
+
+/**
+ * Take the server's word for who we are.
+ *
+ * Persisted so the next launch writes under the right name from its very first
+ * save, rather than under a placeholder until it happens to sync.
+ */
+function adoptServerActor(): void {
+  const actor = syncManager?.getActor();
+  if (!actor) return;
+
+  store?.setActor(actor);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('unimem:actor', actor);
+  }
 }
 
 // ---------------------------------------------------------------------------

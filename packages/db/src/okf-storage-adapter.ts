@@ -212,6 +212,18 @@ export class OkfStorageAdapter implements StorageAdapter {
   }
 
   /**
+   * Adopt the identity the server recognises.
+   *
+   * A device writes under a local guess until it has synced once, because a
+   * vault nobody has claimed has no identity to hand out yet. Once the server
+   * has said who we are, that is the name that goes on the files - otherwise
+   * the same person appears twice in one vault under two names.
+   */
+  setActor(actor: string): void {
+    this.actor = actor;
+  }
+
+  /**
    * Write a document that arrived from the server into the bundle.
    *
    * Distinct from `create`/`update`, and deliberately so: this is not a local
