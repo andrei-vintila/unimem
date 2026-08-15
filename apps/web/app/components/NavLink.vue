@@ -5,7 +5,14 @@ const props = defineProps<{
 }>();
 
 const route = useRoute();
-const isActive = computed(() => route.path === props.to);
+
+// Sub-routes keep their section highlighted (/daily/new lights up "Daily
+// Notes"). "/" is matched exactly, since every path starts with it.
+const isActive = computed(() =>
+  props.to === '/'
+    ? route.path === '/'
+    : route.path === props.to || route.path.startsWith(`${props.to}/`)
+);
 </script>
 
 <template>

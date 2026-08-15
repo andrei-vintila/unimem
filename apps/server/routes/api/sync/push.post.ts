@@ -22,6 +22,7 @@ interface PushResponse {
 }
 
 export default defineEventHandler(async (event): Promise<PushResponse> => {
+  const startedAt = Date.now();
   const body = await readBody<PushPayload>(event);
 
   if (!body.clientId || !Array.isArray(body.entities)) {
@@ -57,6 +58,25 @@ export default defineEventHandler(async (event): Promise<PushResponse> => {
   }
 
   console.log(`[Sync] Push from ${body.clientId}: ${body.entities.length} entities, ${conflicts.length} conflicts`);
+
+  // Counts and timing only. The entities themselves are the user's notes.
+  trackEvents(
+    event,
+    body.clientId,
+    {
+      name: 'sync_started',
+      properties: { direction: 'push', entity_count: body.entities.length },
+    },
+    {
+      name: 'sync_completed',
+      properties: {
+        direction: 'push',
+        entity_count: body.entities.length,
+        duration_ms: Math.round(Date.now() - startedAt),
+        conflict_count: conflicts.length,
+      },
+    }
+  );
 
   return { success: true, syncVersion: newVersion, conflicts };
 });

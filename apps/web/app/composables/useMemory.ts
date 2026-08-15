@@ -7,6 +7,7 @@ import type {
 } from '@unimem/types';
 import { MemoryEngine } from '@unimem/core';
 import { DatabaseClient, PGliteStorageAdapter } from '@unimem/db';
+import { toErrorCode } from '@unimem/analytics';
 
 // Global state
 const isInitialized = ref(false);
@@ -17,6 +18,8 @@ let dbClient: DatabaseClient | null = null;
 let memoryEngine: MemoryEngine | null = null;
 
 export function useMemory() {
+  const analytics = useAnalytics();
+
   /**
    * Initialize the memory system
    */
@@ -24,6 +27,7 @@ export function useMemory() {
     if (isInitialized.value) return;
 
     isLoading.value = true;
+    const startedAt = performance.now();
 
     try {
       // Create database client with IndexedDB storage (browser)
@@ -57,8 +61,28 @@ export function useMemory() {
       }
 
       isInitialized.value = true;
+
+      analytics.capture({
+        name: 'memory_initialized',
+        properties: {
+          duration_ms: Math.round(performance.now() - startedAt),
+          success: true,
+        },
+      });
     } catch (error) {
       console.error('Failed to initialize memory system:', error);
+
+      // PGlite/IndexedDB failures are browser- and platform-specific, and this
+      // is currently the only signal we get that a user never got started.
+      analytics.capture({
+        name: 'memory_initialized',
+        properties: {
+          duration_ms: Math.round(performance.now() - startedAt),
+          success: false,
+          error_code: toErrorCode(error),
+        },
+      });
+
       throw error;
     } finally {
       isLoading.value = false;
@@ -83,6 +107,16 @@ export function useMemory() {
   ): Promise<T> {
     const engine = getEngine();
     const entity = await engine.createEntity<T>(data);
+
+    // Type and layer only - the title and content stay on the device.
+    analytics.capture({
+      name: 'entity_created',
+      properties: {
+        entity_type: entity.type,
+        memory_layer: entity.memoryLayer,
+        creation_method: 'manual',
+      },
+    });
 
     // Refresh stats
     stats.value = await engine.getStats();
@@ -140,7 +174,21 @@ export function useMemory() {
     query: string,
     filter?: EntityFilter
   ): Promise<SearchResponse<T>> {
-    return getEngine().searchSimilar<T>(query, { filter });
+    const startedAt = performance.now();
+    const response = await getEngine().searchSimilar<T>(query, { filter });
+
+    // Result count and latency only. The query string never leaves the device.
+    analytics.capture({
+      name: 'search_performed',
+      properties: {
+        result_count: response.results.length,
+        duration_ms: Math.round(performance.now() - startedAt),
+        has_results: response.results.length > 0,
+        search_type: 'vector',
+      },
+    });
+
+    return response;
   }
 
   /**

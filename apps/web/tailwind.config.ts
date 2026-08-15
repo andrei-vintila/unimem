@@ -1,6 +1,10 @@
 import type { Config } from 'tailwindcss';
 
 export default {
+  // Class-based rather than Tailwind's `media` default, so the Settings page
+  // can override the OS. The `system` preference re-applies the media query
+  // itself (see app/composables/useTheme.ts), so the default is unchanged.
+  darkMode: 'class',
   content: [
     './app/components/**/*.{js,vue,ts}',
     './app/layouts/**/*.vue',

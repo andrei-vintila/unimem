@@ -4,6 +4,7 @@
 
 import { eq, and, inArray, gte, lte, sql } from 'drizzle-orm';
 import type {
+  BaseEntity,
   Entity,
   EntityType,
   MemoryLayerType,
@@ -15,7 +16,7 @@ import type {
 } from '@unimem/types';
 import type { StorageAdapter } from '@unimem/core';
 import type { DatabaseClient } from './client';
-import { entities, type EntityRow, type NewEntityRow } from './schema';
+import { entities, syncLog, type EntityRow, type NewEntityRow } from './schema';
 
 // -----------------------------------------------------------------------------
 // PGlite Storage Adapter
@@ -269,12 +270,20 @@ export class PGliteStorageAdapter implements StorageAdapter {
       .where(sql`embedding IS NOT NULL`);
     const vectorCount = Number(vectorResult[0]?.count ?? 0);
 
+    // Most recent sync-log entry. Stays undefined on a vault that has never
+    // synced, which the dashboard renders as "Never".
+    const lastSyncResult = await db
+      .select({ timestamp: sql<Date | null>`max(${syncLog.timestamp})` })
+      .from(syncLog);
+    const lastSync = lastSyncResult[0]?.timestamp ?? undefined;
+
     return {
       totalEntities,
       byLayer,
       byType,
       storageSize: 0, // Would need to query pg_total_relation_size
       vectorCount,
+      ...(lastSync ? { lastSync: new Date(lastSync) } : {}),
     };
   }
 
@@ -283,7 +292,12 @@ export class PGliteStorageAdapter implements StorageAdapter {
   // ---------------------------------------------------------------------------
 
   private rowToEntity<T extends Entity>(row: EntityRow): T {
-    const base: Entity = {
+    // Typed as `BaseEntity`, not `Entity`: the shared columns can never satisfy
+    // any member of the `Entity` union on their own, because each member adds
+    // required fields of its own (a Resource's `resourceType`, an Area's
+    // `scope`). Those live in the `metadata` JSONB column and are merged in
+    // below, which is what makes the cast at the end sound.
+    const base: BaseEntity = {
       id: row.id,
       type: row.type as EntityType,
       memoryLayer: row.memoryLayer as MemoryLayerType,

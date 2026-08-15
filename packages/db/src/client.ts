@@ -15,7 +15,7 @@ export interface DatabaseConfig {
    * Path for persistent storage
    * - Use 'memory://' for in-memory database
    * - Use 'idb://dbname' for IndexedDB (browser)
-   * - Use file path for Node.js/Tauri
+   * - Use file path for Node.js / the desktop shell's main process
    */
   dataDir: string;
 
@@ -122,8 +122,11 @@ export class DatabaseClient {
       }
     }
 
-    // Create tables
-    await pg.query(`
+    // `exec`, not `query`: PGlite's `query` uses the extended protocol, which
+    // carries exactly one statement per prepared statement and rejects a batch
+    // like this one with "cannot insert multiple commands into a prepared
+    // statement". `exec` uses the simple protocol, which takes a script.
+    await pg.exec(`
       -- Entities table
       CREATE TABLE IF NOT EXISTS entities (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -37,6 +37,9 @@ yarn-error.log*
 # Nuxt
 .nuxt/
 .output/
+# Symlink to .output/public that `nuxt generate` creates; the `dist/` rule
+# above does not match it.
+apps/web/dist
 
 # Nitro
 .nitro/
@@ -45,8 +48,9 @@ yarn-error.log*
 # Node compile cache
 node-compile-cache/
 
-# Tauri
-apps/desktop/src-tauri/target/
+# Electron
+apps/desktop/release/
+apps/desktop/renderer/
 
 # Drizzle migrations (generated)
 drizzle/
@@ -61,3 +65,7 @@ coverage/
 
 # PGlite local data
 *.db
+
+# Wrangler local secrets
+.dev.vars
+.wrangler/

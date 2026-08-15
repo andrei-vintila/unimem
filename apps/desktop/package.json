@@ -2,20 +2,29 @@
   "name": "@unimem/desktop",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "description": "Unimem desktop shell (Electron)",
+  "//productName": "Electron derives app.getName() - and therefore the userData directory - from this, falling back to `name`. Without it the app would store data under 'Application Support/@unimem/desktop'.",
+  "productName": "Unimem",
+  "main": "dist/main/index.js",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
-    "tauri": "tauri"
-  },
-  "dependencies": {
-    "@unimem/core": "workspace:*",
-    "@unimem/db": "workspace:*",
-    "@unimem/types": "workspace:*"
+    "dev": "concurrently -k -n web,shell -c cyan,magenta \"pnpm --filter @unimem/web dev\" \"pnpm run dev:shell\"",
+    "dev:shell": "wait-on tcp:3000 && pnpm run build && electron .",
+    "build": "pnpm run build:main && pnpm run build:preload",
+    "build:main": "tsc -p tsconfig.json",
+    "build:preload": "esbuild src/preload/index.ts --bundle --platform=node --target=node20 --format=cjs --external:electron --outfile=dist/preload/index.js",
+    "build:renderer": "pnpm --filter @unimem/web generate && node scripts/copy-renderer.mjs",
+    "package": "pnpm run build && pnpm run build:renderer && electron-builder",
+    "package:dir": "pnpm run build && pnpm run build:renderer && electron-builder --dir",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "icon": "electron scripts/render-icon.mjs"
   },
   "devDependencies": {
-    "@tauri-apps/api": "^2.0.0",
-    "@tauri-apps/cli": "^2.0.0",
-    "typescript": "^5.3.3"
+    "@types/node": "^20.11.0",
+    "concurrently": "^9.1.0",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.3",
+    "wait-on": "^8.0.1"
   }
 }

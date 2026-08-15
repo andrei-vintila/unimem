@@ -1,0 +1,36 @@
+appId: com.unimem.app
+productName: Unimem
+
+directories:
+  output: release
+  buildResources: build
+
+# `renderer/` is the web app's prerendered output, staged here by
+# `pnpm run build:renderer`. It is generated - not checked in.
+files:
+  - dist/**/*
+  - renderer/**/*
+  - package.json
+
+# PGlite ships a .wasm and a .data file that must stay as real files on disk;
+# asar-packing them makes them unreadable to the WebAssembly loader.
+asarUnpack:
+  - '**/*.wasm'
+  - '**/*.data'
+
+mac:
+  category: public.app-category.productivity
+  minimumSystemVersion: '10.15'
+  target:
+    - dmg
+    - zip
+
+win:
+  target:
+    - nsis
+
+linux:
+  category: Utility
+  target:
+    - AppImage
+    - deb

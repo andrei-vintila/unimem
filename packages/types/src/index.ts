@@ -209,6 +209,8 @@ export interface MemoryStats {
   byType: Record<EntityType, number>;
   storageSize: number; // bytes
   vectorCount: number;
+  /** Timestamp of the most recent sync-log entry; absent if never synced. */
+  lastSync?: Date;
 }
 
 // -----------------------------------------------------------------------------

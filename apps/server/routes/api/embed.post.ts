@@ -9,8 +9,13 @@ interface EmbedResponse {
 }
 
 export default defineEventHandler(async (event): Promise<EmbedResponse> => {
+  const startedAt = Date.now();
   const body = await readBody<EmbedRequest>(event);
   const config = useRuntimeConfig();
+
+  // No account system yet, so the bearer token is the only stable actor here.
+  // `trackEvents` hashes it before anything leaves the Worker.
+  const actor = getAuthToken(event) ?? 'anonymous';
 
   if (!body.texts || body.texts.length === 0) {
     throw createError({
@@ -52,12 +57,32 @@ export default defineEventHandler(async (event): Promise<EmbedResponse> => {
       (item: { embedding: number[] }) => item.embedding
     );
 
+    trackEvents(event, actor, {
+      name: 'embedding_requested',
+      properties: {
+        text_count: body.texts.length,
+        duration_ms: Math.round(Date.now() - startedAt),
+        success: true,
+      },
+    });
+
     return {
       embeddings,
       dimensions: embeddings[0]?.length ?? 0,
     };
   } catch (error) {
     console.error('Embedding error:', error);
+
+    trackEvents(event, actor, {
+      name: 'embedding_requested',
+      properties: {
+        text_count: body.texts.length,
+        duration_ms: Math.round(Date.now() - startedAt),
+        success: false,
+        error_code: toErrorCode(error),
+      },
+    });
+
     throw createError({
       statusCode: 500,
       message: 'Failed to generate embeddings',

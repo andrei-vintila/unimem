@@ -13,13 +13,21 @@
     "paths": {
       "@unimem/types": ["./packages/types/src"],
       "@unimem/core": ["./packages/core/src"],
-      "@unimem/db": ["./packages/db/src"]
+      "@unimem/db": ["./packages/db/src"],
+      "@unimem/analytics": ["./packages/analytics/src"],
+      "@unimem/analytics/browser": ["./packages/analytics/src/browser"]
     }
   },
   "references": [
     { "path": "./packages/types" },
     { "path": "./packages/core" },
-    { "path": "./packages/db" }
+    { "path": "./packages/db" },
+    { "path": "./packages/analytics" }
   ],
+  // Only the shared libraries. Each app depends on types its framework
+  // generates - Nuxt's `.nuxt/tsconfig.json`, Nitro's auto-imports, Electron's
+  // CommonJS module layout - so each carries its own tsconfig and its own
+  // `typecheck` script. `pnpm typecheck` at the root runs all of them.
+  "include": ["packages/*/src"],
   "exclude": ["node_modules", "**/dist", "**/node_modules"]
 }

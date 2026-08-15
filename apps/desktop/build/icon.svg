@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Unimem</title>
+
+  <!--
+    Four satellites around a hub: the four memory layers feeding working
+    memory. Colors are the layer palette from apps/web/tailwind.config.ts, so
+    the icon and the app agree on what each layer looks like.
+
+    Kept to five shapes and one gradient deliberately - at 16px in a dock or a
+    tab strip, anything finer collapses into mud.
+  -->
+
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#312e81"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" ry="228" fill="url(#tile)"/>
+
+  <g stroke="#ffffff" stroke-opacity="0.45" stroke-width="20" stroke-linecap="round">
+    <line x1="512" y1="512" x2="328" y2="328"/>
+    <line x1="512" y1="512" x2="696" y2="328"/>
+    <line x1="512" y1="512" x2="328" y2="696"/>
+    <line x1="512" y1="512" x2="696" y2="696"/>
+  </g>
+
+  <!-- Episodic, working, semantic, procedural -->
+  <circle cx="328" cy="328" r="66" fill="#3b82f6"/>
+  <circle cx="696" cy="328" r="66" fill="#f59e0b"/>
+  <circle cx="328" cy="696" r="66" fill="#22c55e"/>
+  <circle cx="696" cy="696" r="66" fill="#a855f7"/>
+
+  <circle cx="512" cy="512" r="96" fill="#ffffff"/>
+</svg>

@@ -36,6 +36,11 @@ export function createEmbeddingProvider(
 // OpenAI Embedding Provider
 // -----------------------------------------------------------------------------
 
+/** Shape of the OpenAI `/embeddings` response we depend on. */
+interface OpenAIEmbeddingResponse {
+  data: Array<{ embedding: number[] }>;
+}
+
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   private apiKey: string;
   private model: string;
@@ -73,7 +78,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       throw new Error(`OpenAI embedding failed: ${error}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as OpenAIEmbeddingResponse;
     return data.data[0].embedding;
   }
 
@@ -95,8 +100,8 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       throw new Error(`OpenAI batch embedding failed: ${error}`);
     }
 
-    const data = await response.json();
-    return data.data.map((item: { embedding: number[] }) => item.embedding);
+    const data = (await response.json()) as OpenAIEmbeddingResponse;
+    return data.data.map((item) => item.embedding);
   }
 
   getDimensions(): number {

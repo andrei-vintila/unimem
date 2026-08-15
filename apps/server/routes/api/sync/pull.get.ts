@@ -8,6 +8,7 @@ interface PullResponse {
 }
 
 export default defineEventHandler(async (event): Promise<PullResponse> => {
+  const startedAt = Date.now();
   const query = getQuery(event);
   const clientId = query.clientId as string;
   const lastSyncVersion = (query.lastSyncVersion as string) || '0';
@@ -37,9 +38,25 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     `[Sync] Pull for ${clientId} since ${lastSyncVersion}: ${items.length} entities, hasMore=${hasMore}`
   );
 
-  return {
-    entities: items.map((s) => s.entity),
-    syncVersion,
-    hasMore,
-  };
+  const entities = items.map((stored) => stored.entity);
+
+  trackEvents(
+    event,
+    clientId,
+    {
+      name: 'sync_started',
+      properties: { direction: 'pull', entity_count: 0 },
+    },
+    {
+      name: 'sync_completed',
+      properties: {
+        direction: 'pull',
+        entity_count: entities.length,
+        duration_ms: Math.round(Date.now() - startedAt),
+        conflict_count: 0,
+      },
+    }
+  );
+
+  return { entities, syncVersion, hasMore };
 });
