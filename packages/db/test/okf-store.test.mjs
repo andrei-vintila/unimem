@@ -304,3 +304,34 @@ test('applying a remote change does not queue it for pushing back', async () => 
   );
   assert.equal(Number(pending.rows[0].n), 0);
 });
+
+test('the access policy is a file in the vault, not just a server setting', async () => {
+  const { adapter, root } = await createStore();
+
+  assert.equal(await adapter.readPolicy(), null, 'a vault starts with no policy');
+
+  const source = 'write /project/   @sam\nread  /person/    @sam\n';
+  await adapter.writePolicy(source);
+
+  // Byte for byte: the file *is* the policy source, so an edit made in a text
+  // editor can be compared against the server's copy without normalising.
+  const onDisk = await fs.readFile(path.join(root, 'DOCOWNERS'), 'utf8');
+  assert.equal(onDisk, source);
+  assert.equal(await adapter.readPolicy(), source);
+});
+
+test('the policy file is not mistaken for a document', async () => {
+  const { adapter } = await createStore();
+
+  await adapter.create(person());
+  await adapter.writePolicy('write /project/   @sam\n');
+
+  const report = await adapter.rebuild();
+
+  assert.equal(report.entities, 1, 'DOCOWNERS is not an entity');
+  assert.deepEqual(
+    report.skipped,
+    [],
+    'nor is it a malformed one - it has no .md extension, so it is simply not a document'
+  );
+});

@@ -62,6 +62,18 @@ export interface SyncManagerConfig {
    * the store, such as the browser.
    */
   applyRemote?: (entity: Entity) => Promise<void>;
+  /**
+   * The vault's access policy, as a file in the bundle.
+   *
+   * Omit on a surface with no bundle. Without this the policy exists only in
+   * the server's store, and none of the reasons for expressing it as a file -
+   * that it is versioned, diffable, and travels with a clone - are actually
+   * true of it.
+   */
+  policyFile?: {
+    read(): Promise<string | null>;
+    write(source: string): Promise<void>;
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -123,6 +135,10 @@ export class SyncManager {
   private clientId: string;
   private paths: () => Record<string, string>;
   private applyRemote?: (entity: Entity) => Promise<void>;
+  private policyFile?: SyncManagerConfig['policyFile'];
+
+  /** The policy as the server last reported it, to tell a local edit apart. */
+  private lastKnownPolicy: string | null = null;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private eventHandlers: Set<SyncEventHandler> = new Set();
 
@@ -154,6 +170,7 @@ export class SyncManager {
     this.clientId = config.clientId;
     this.paths = config.paths ?? (() => ({}));
     this.applyRemote = config.applyRemote;
+    this.policyFile = config.policyFile;
   }
 
   // ---------------------------------------------------------------------------
@@ -204,6 +221,7 @@ export class SyncManager {
       }
 
       await this.pullChanges();
+      await this.syncPolicy();
 
       const conflictCount = await this.getConflictCount();
 
@@ -340,6 +358,63 @@ export class SyncManager {
         console.error('[SyncManager] Event handler error:', err);
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Policy
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Reconcile the DOCOWNERS file with the server's copy.
+   *
+   * The server is the enforcement point, so its copy is what actually governs -
+   * but the file is how a person reads and changes the policy, so an edit made
+   * there has to reach the server or the file is decoration.
+   *
+   * A local edit is anything differing from what the server last reported.
+   * Pushing it only succeeds for the owner; for anyone else the server refuses
+   * and the file is put back, which is the honest outcome: they are looking at
+   * a policy they cannot change.
+   */
+  private async syncPolicy(): Promise<void> {
+    if (!this.policyFile) return;
+
+    const response = await fetch(`${this.config.serverUrl}/api/vault/docowners`, {
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) return;
+
+    const remote = ((await response.json()) as { source: string | null }).source;
+    const local = await this.policyFile.read();
+
+    if (local === remote) {
+      this.lastKnownPolicy = remote;
+      return;
+    }
+
+    const editedHere =
+      local !== null && this.lastKnownPolicy !== null && local !== this.lastKnownPolicy;
+
+    if (editedHere) {
+      const saved = await fetch(`${this.config.serverUrl}/api/vault/docowners`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+        body: JSON.stringify({ source: local }),
+      });
+
+      if (saved.ok) {
+        this.lastKnownPolicy = local;
+        return;
+      }
+
+      console.warn(
+        '[SyncManager] Policy edit not accepted; restoring the vault copy. ' +
+          'Only the vault owner can change DOCOWNERS.'
+      );
+    }
+
+    if (remote !== null) await this.policyFile.write(remote);
+    this.lastKnownPolicy = remote;
   }
 
   // ---------------------------------------------------------------------------
