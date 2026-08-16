@@ -2,10 +2,11 @@
 // Sync settings - where this device syncs, and as whom
 // =============================================================================
 //
-// Both values are per-device rather than per-build. The server derives the
-// vault from the token, so pointing a second device at the same server with
-// the same token is the whole of "set up sync on my other machine" - there is
-// no account to create and no pairing step.
+// Both values are per-device rather than per-build. The token identifies a
+// person: the first one to reach a server claims a vault and owns it, and the
+// owner mints tokens for anyone else joining, each scoped to the folders they
+// may write. Using your own token on a second machine is the whole of "set up
+// sync on my other machine" - there is no account to create.
 //
 // Stored in localStorage, which means script running on this origin can read
 // the token. That is the same exposure as the vault contents sitting in

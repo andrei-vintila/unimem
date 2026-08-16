@@ -7,10 +7,14 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    // @unimem/okf ships a node:fs-backed BundleFs; without this the root pass
+    // cannot resolve it, even though each package's own tsconfig can.
+    "types": ["node"],
     "paths": {
       "@unimem/types": ["./packages/types/src"],
       "@unimem/core": ["./packages/core/src"],
       "@unimem/db": ["./packages/db/src"],
+      "@unimem/okf": ["./packages/okf/src"],
       "@unimem/analytics": ["./packages/analytics/src"],
       "@unimem/analytics/browser": ["./packages/analytics/src/browser"]
     }

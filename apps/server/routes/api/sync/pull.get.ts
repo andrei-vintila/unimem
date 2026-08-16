@@ -1,7 +1,8 @@
 import { createError, defineEventHandler, getQuery } from 'h3';
 
 import { trackEvents } from '~/utils/analytics';
-import { requireVaultId } from '~/utils/auth';
+import { requireMember } from '~/utils/auth';
+import { canReadPath } from '~/utils/authz';
 import type { Entity } from '@unimem/types';
 import {
   getEntitiesAfter,
@@ -13,11 +14,20 @@ interface PullResponse {
   entities: Entity[];
   syncVersion: string;
   hasMore: boolean;
+  /**
+   * Who the server recognises the caller as.
+   *
+   * Returned here as well as on push because a device with nothing to send
+   * would otherwise never learn its own identity, and would keep writing under
+   * whatever placeholder it invented before it first synced.
+   */
+  actor: string;
 }
 
 export default defineEventHandler(async (event): Promise<PullResponse> => {
   const startedAt = Date.now();
-  const vaultId = await requireVaultId(event);
+  const member = await requireMember(event);
+  const vaultId = member.vaultId;
 
   const query = getQuery(event);
   const clientId = query.clientId as string;
@@ -35,7 +45,8 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     vaultId,
     since,
     clientId,
-    limit
+    limit,
+    (path) => canReadPath(member, path)
   );
 
   const entities = items.map((stored) => stored.entity);
@@ -58,5 +69,10 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     }
   );
 
-  return { entities, syncVersion: formatCursor(cursor), hasMore };
+  return {
+    entities,
+    syncVersion: formatCursor(cursor),
+    hasMore,
+    actor: member.actor,
+  };
 });

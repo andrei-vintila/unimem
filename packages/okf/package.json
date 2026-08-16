@@ -1,7 +1,7 @@
 {
-  "name": "@unimem/db",
+  "name": "@unimem/okf",
   "version": "0.1.0",
-  "description": "PGlite + ElectricSQL database layer for Unimem",
+  "description": "Open Knowledge Format bundles as unimem's source of truth",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,25 +9,24 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node-fs.d.ts",
+      "import": "./dist/node-fs.js"
     }
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "tsc && node --test test/",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.5",
-    "@unimem/core": "workspace:*",
-    "@unimem/okf": "workspace:*",
     "@unimem/types": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.10",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.2.0",
     "typescript": "^6.0.3"
   }
 }

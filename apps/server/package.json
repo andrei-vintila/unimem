@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "nitro dev",
+    "test": "tsc -p tsconfig.test.json && node --test test/",
     "build": "nitro build",
     "preview": "nitro preview",
     "deploy": "nitro deploy",

@@ -16,6 +16,7 @@
     "@unimem/analytics": "workspace:*",
     "@unimem/core": "workspace:*",
     "@unimem/db": "workspace:*",
+    "@unimem/okf": "workspace:*",
     "@unimem/types": "workspace:*",
     "pinia": "^4.0.3",
     "vue": "^3.5.41",

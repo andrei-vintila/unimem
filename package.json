@@ -9,7 +9,7 @@
     "dev:server": "pnpm --filter @unimem/server dev",
     "dev:obsidian": "pnpm --filter @unimem/obsidian-plugin dev",
     "build": "pnpm -r build",
-    "build:packages": "pnpm --filter @unimem/types build && pnpm --filter @unimem/core build && pnpm --filter @unimem/analytics build && pnpm --filter @unimem/db build",
+    "build:packages": "pnpm --filter @unimem/types build && pnpm --filter @unimem/core build && pnpm --filter @unimem/analytics build && pnpm --filter @unimem/okf build && pnpm --filter @unimem/db build",
     "build:web": "pnpm --filter @unimem/web build",
     "build:desktop": "pnpm --filter @unimem/desktop build",
     "package:desktop": "pnpm --filter @unimem/desktop package",
@@ -29,6 +29,7 @@
   "author": "Andrei Vintila",
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^26.2.0",
     "typescript": "^6.0.3"
   },
   "engines": {

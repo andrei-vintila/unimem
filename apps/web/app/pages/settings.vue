@@ -30,11 +30,16 @@ const version = computed(
 );
 
 const storageLocation = ref('Loading...');
+const vaultLocation = ref<string | null>(null);
 
 onMounted(async () => {
   storageLocation.value = bridge.value
     ? await bridge.value.getDatabasePath()
     : 'IndexedDB (idb://unimem)';
+
+  // The vault is the store; the database above it is only a derived index.
+  // On web there is no filesystem to hold one.
+  vaultLocation.value = bridge.value ? await bridge.value.bundle.root() : null;
 });
 
 const isRefreshing = ref(false);
@@ -53,7 +58,7 @@ async function refresh() {
 // ---------------------------------------------------------------------------
 
 const { serverUrl, authToken, isConfigured, save } = useSyncSettings();
-const { syncState, reconfigure, syncNow } = useSync();
+const { syncState, rejections, reconfigure, syncNow } = useSync();
 
 const serverUrlDraft = ref(serverUrl.value);
 const authTokenDraft = ref(authToken.value);
@@ -117,9 +122,21 @@ async function applySyncSettings() {
       <h2 class="text-xl font-semibold mb-4">Storage</h2>
       <div class="card p-4">
         <dl class="space-y-3">
+          <div v-if="vaultLocation" class="flex gap-4">
+            <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">
+              Vault
+            </dt>
+            <dd class="text-sm font-mono break-all">
+              {{ vaultLocation }}
+              <p class="font-sans text-[var(--color-muted)] mt-1">
+                Markdown files, one per entity. This is the store — open it in
+                Obsidian, track it in git, edit it by hand.
+              </p>
+            </dd>
+          </div>
           <div class="flex gap-4">
             <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">
-              Database
+              {{ vaultLocation ? 'Index' : 'Database' }}
             </dt>
             <dd class="text-sm font-mono break-all">{{ storageLocation }}</dd>
           </div>
@@ -152,9 +169,9 @@ async function applySyncSettings() {
       <h2 class="text-xl font-semibold mb-4">Sync</h2>
       <div class="card p-4">
         <p class="text-sm text-[var(--color-muted)] mb-4">
-          Point every device at the same server with the same token and they
-          share one vault. The token is what identifies the vault, so treat it
-          like a password.
+          Your token identifies you, not just your devices — use the same one
+          on each of your machines, and ask the vault owner for a token of your
+          own if you are joining someone else's. Treat it like a password.
         </p>
 
         <form class="space-y-4" @submit.prevent="applySyncSettings">
@@ -208,6 +225,31 @@ async function applySyncSettings() {
           </div>
         </form>
 
+        <div
+          v-if="rejections.length > 0"
+          class="mt-4 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 dark:border-amber-800"
+        >
+          <p class="text-sm font-medium">
+            {{ rejections.length }}
+            {{ rejections.length === 1 ? 'change was' : 'changes were' }}
+            sent for review
+          </p>
+          <p class="text-sm text-[var(--color-muted)] mt-1">
+            You do not have write access to those folders, so these were kept
+            as change requests. They stay here either way — someone who can
+            write there decides whether they land.
+          </p>
+          <ul class="mt-2 space-y-1">
+            <li
+              v-for="rejection in rejections"
+              :key="rejection.entityId"
+              class="text-sm font-mono break-all"
+            >
+              {{ rejection.reason }}
+            </li>
+          </ul>
+        </div>
+
         <dl class="space-y-3 mt-6 pt-4 border-t border-[var(--color-border)]">
           <div class="flex gap-4">
             <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">
@@ -232,6 +274,10 @@ async function applySyncSettings() {
         </dl>
       </div>
     </section>
+
+    <VaultMembers />
+
+    <ChangeRequests />
 
     <section>
       <h2 class="text-xl font-semibold mb-4">About</h2>

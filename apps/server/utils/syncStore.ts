@@ -25,6 +25,17 @@ export interface StoredEntity {
   serverVersion: string;
   /** Which client last modified this entity */
   clientId: string;
+  /**
+   * Where this document lives in the bundle, which is what write grants are
+   * scoped to. Server-held rather than client-supplied on each request, so a
+   * document cannot be moved out of a protected folder by claiming it was
+   * somewhere else all along.
+   */
+  path: string;
+  /** The actor who first wrote it. Creators keep access to their own notes. */
+  createdBy?: string;
+  /** The actor who last wrote it, as observed - never as claimed. */
+  updatedBy?: string;
 }
 
 const NS = 'sync';
@@ -120,12 +131,18 @@ export async function setStoredEntity(
  * Return this vault's entities ordered after `since` (exclusive), excluding
  * those last written by `excludeClientId` (to avoid echo), oldest-first and
  * limited to `limit` items.
+ *
+ * `canRead` filters *before* paging rather than after. Filtering a page after
+ * selecting it would hand back short or empty pages whose gaps track documents
+ * the caller is not allowed to know exist - and would stall the cursor, since
+ * a page of nothing cannot advance it.
  */
 export async function getEntitiesAfter(
   vaultId: string,
   since: SyncCursor,
   excludeClientId: string,
-  limit: number
+  limit: number,
+  canRead: (path: string) => boolean = () => true
 ): Promise<{ items: StoredEntity[]; hasMore: boolean; cursor: SyncCursor }> {
   const storage = useStorage(NS);
   const prefix = vaultPrefix(vaultId);
@@ -137,6 +154,10 @@ export async function getEntitiesAfter(
     const item = await storage.getItem<StoredEntity>(key);
     if (!item) continue;
     if (item.clientId === excludeClientId) continue;
+
+    // Records written before paths were stored fall back to their type's
+    // folder, which is where their document lives.
+    if (!canRead(item.path ?? `${item.entity.type}/`)) continue;
 
     const cursor: SyncCursor = {
       version: item.serverVersion,

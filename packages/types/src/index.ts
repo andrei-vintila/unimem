@@ -76,6 +76,19 @@ export interface BaseEntity {
    */
   deletedAt?: Date;
 
+  /**
+   * Who produced this entity, and who last changed it.
+   *
+   * A vault has more than one contributor, so "when" is not enough to explain
+   * a change - and once an agent can write here too, the distinction between a
+   * person and a process is the difference between a fact and a suggestion.
+   *
+   * Values follow OKF's actor convention: `human:<id>` for a person,
+   * `<producer>/<version>` for an agent, `process:<id>` for automation.
+   */
+  createdBy?: string;
+  updatedBy?: string;
+
   // Relations
   links: EntityLink[];
   tags: string[];
@@ -206,8 +219,9 @@ export interface ReplicationConfig {
   enabled: boolean;
   serverUrl?: string;
   /**
-   * Sync token. The server derives the vault namespace from it, so every
-   * device that should share a vault has to present the same token.
+   * Sync token, which identifies a person rather than a device. The server
+   * resolves it to a member of a vault and the folders they may write, so two
+   * people sharing a vault hold different tokens.
    */
   authToken?: string;
   syncInterval: number; // milliseconds
@@ -270,6 +284,8 @@ export type MemoryEventType =
   | 'sync:started'
   | 'sync:completed'
   | 'sync:conflict'
+  /** The server refused a write: this folder is not yours to edit. */
+  | 'sync:rejected'
   | 'consolidation:started'
   | 'consolidation:completed';
 

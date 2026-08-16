@@ -15,7 +15,7 @@ const DATABASE_FILENAME = 'unimem.db';
  * Electron creates `userData` lazily, and only on first write. Callers get a
  * path they can immediately write into.
  */
-async function appDataDir(): Promise<string> {
+export async function appDataDir(): Promise<string> {
   const dir = app.getPath('userData');
   await fs.mkdir(dir, { recursive: true });
   return dir;
