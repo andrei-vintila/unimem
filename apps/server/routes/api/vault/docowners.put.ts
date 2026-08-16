@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, readBody } from 'h3';
 
 import { requireMember, requireOwner } from '~/utils/auth';
-import { parseDocowners } from '~/utils/docowners';
+import { parseDocowners } from '@unimem/okf';
 import { setPolicySource } from '~/utils/policyStore';
 
 interface PolicyPayload {

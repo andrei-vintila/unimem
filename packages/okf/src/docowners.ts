@@ -25,8 +25,13 @@
 //     of confusion about what is actually in force.
 //
 // The policy lives in the vault as a file, so it is versioned, diffable and
-// travels with a clone - but the server enforces its *own* copy. A client's
-// word for what the rules say is not evidence.
+// travels with a clone. It sits in this package rather than the server's
+// because both sides need it: the server to enforce, and the client to say in
+// advance what a person can edit rather than refusing them after the fact.
+//
+// Those two uses are not equal. The server decides against its own copy, and
+// a client's word for what the rules say is not evidence - a client-side
+// answer is a courtesy to the person using the app, never a permission.
 
 export type Access = 'read' | 'write';
 

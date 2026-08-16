@@ -3,5 +3,6 @@
 // =============================================================================
 
 export * from './profile.js';
+export * from './docowners.js';
 export * from './document.js';
 export * from './bundle.js';

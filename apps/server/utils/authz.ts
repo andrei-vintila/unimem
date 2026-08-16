@@ -14,7 +14,7 @@
 
 import type { Entity } from '@unimem/types';
 
-import { policyAllows, type Policy } from './docowners';
+import { policyAllows, type Policy } from '@unimem/okf';
 import type { Member } from './membership';
 
 /** A grant covering the entire vault. */

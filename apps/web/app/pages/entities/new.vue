@@ -16,6 +16,7 @@ definePageMeta({
 });
 
 const { createEntity, getEngine } = useMemory();
+const { canWriteEntity, pathFor, refresh: refreshPolicy } = usePolicy();
 const { ENTITY_TYPES, layerFor, layerLabel, layerClass } = useEntityTypes();
 const route = useRoute();
 const router = useRouter();
@@ -27,6 +28,22 @@ const initialType = ENTITY_TYPES.some((t) => t.type === route.query.type)
 
 const type = ref<EntityType>(initialType);
 const title = ref('');
+
+/**
+ * Where this will land, and whether it lands directly.
+ *
+ * The folder follows the type, so someone can see before they start writing
+ * that a person goes somewhere they do not own - rather than discovering it
+ * when the note turns into a change request.
+ */
+const destination = computed(() => pathFor({ type: type.value, title: title.value }));
+const willBeProposed = computed(
+  () => !canWriteEntity({ type: type.value, title: title.value })
+);
+
+onMounted(() => {
+  void refreshPolicy();
+});
 const content = ref('');
 const tagInput = ref('');
 
@@ -301,11 +318,19 @@ async function save() {
         <input id="tags" v-model="tagInput" type="text" class="input">
       </div>
 
+      <p
+        v-if="willBeProposed"
+        class="text-sm text-[var(--color-muted)] p-3 rounded-lg border border-[var(--color-border)]"
+      >
+        This would go to <span class="font-mono">{{ destination }}</span>, which
+        you do not own — it will be sent to whoever does, as a change request.
+      </p>
+
       <p v-if="error" class="text-red-600">{{ error }}</p>
 
       <div class="flex gap-4">
         <button type="submit" class="btn-primary" :disabled="!canSave">
-          {{ isSaving ? 'Creating...' : 'Create Entity' }}
+          {{ isSaving ? 'Creating...' : willBeProposed ? 'Propose Entity' : 'Create Entity' }}
         </button>
         <NuxtLink to="/entities" class="btn-secondary">Cancel</NuxtLink>
       </div>

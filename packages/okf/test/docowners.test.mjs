@@ -16,7 +16,7 @@ import {
   patternMatches,
   policyAllows,
   specificity,
-} from '../.test-dist/utils/docowners.js';
+} from '../dist/docowners.js';
 
 const allows = (source, actor, access, path) =>
   policyAllows(parseDocowners(source), actor, access, path);

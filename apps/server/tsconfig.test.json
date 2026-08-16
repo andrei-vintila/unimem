@@ -13,5 +13,5 @@
     "allowImportingTsExtensions": false,
     "types": ["node"]
   },
-  "include": ["utils/authz.ts", "utils/docowners.ts"]
+  "include": ["utils/authz.ts"]
 }

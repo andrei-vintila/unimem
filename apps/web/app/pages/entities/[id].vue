@@ -7,6 +7,7 @@ definePageMeta({
 
 const { getEntity, deleteEntity } = useMemory();
 const { labelFor, layerLabel, layerClass } = useEntityTypes();
+const { canWriteEntity, pathFor, refresh: refreshPolicy } = usePolicy();
 const route = useRoute();
 const router = useRouter();
 
@@ -16,7 +17,19 @@ const error = ref<string | null>(null);
 const isDeleting = ref(false);
 const confirmingDelete = ref(false);
 
+/**
+ * Whether changes here would be applied or proposed.
+ *
+ * Advisory: the server decides, and a change to a folder this person does not
+ * own is kept as a change request rather than refused. Saying so up front is
+ * kinder than letting them write and explaining afterwards.
+ */
+const canEdit = computed(() => !entity.value || canWriteEntity(entity.value));
+const documentPath = computed(() => (entity.value ? pathFor(entity.value) : ''));
+
 onMounted(async () => {
+  void refreshPolicy();
+
   try {
     entity.value = await getEntity<Entity>(String(route.params.id));
   } catch (e) {
@@ -139,6 +152,15 @@ async function remove() {
       </section>
 
       <p v-if="error" class="text-red-600 mb-4">{{ error }}</p>
+
+      <p
+        v-if="!canEdit"
+        class="text-sm text-[var(--color-muted)] mb-4 p-3 rounded-lg border border-[var(--color-border)]"
+      >
+        You do not own <span class="font-mono">{{ documentPath }}</span>. You can
+        still change it — your edits are sent to whoever does, as a change
+        request, rather than applied directly.
+      </p>
 
       <div class="flex gap-4">
         <NuxtLink to="/entities" class="btn-secondary">Back</NuxtLink>

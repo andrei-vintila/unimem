@@ -4,6 +4,7 @@ import type { Invitation } from '~/composables/useVaultMembers';
 const { members, you, isOwner, isLoading, error, refresh, invite, revoke } =
   useVaultMembers();
 const { isConfigured } = useSyncSettings();
+const { policy, writableFolders, readableFolders, refresh: refreshPolicy } = usePolicy();
 
 const actor = ref('');
 const writeGrants = ref('');
@@ -67,7 +68,10 @@ async function copyToken() {
   }
 }
 
-onMounted(refresh);
+onMounted(() => {
+  void refresh();
+  void refreshPolicy();
+});
 </script>
 
 <template>
@@ -99,11 +103,23 @@ onMounted(refresh);
         </div>
         <div class="flex gap-4">
           <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">You can edit</dt>
-          <dd class="text-sm font-mono break-all">{{ describeGrants(you.write) }}</dd>
+          <dd class="text-sm font-mono break-all">
+            <!-- Once a vault has a policy, the grants on a membership record
+                 are no longer what decides anything. -->
+            {{ policy ? (writableFolders.join(', ') || 'nothing') : describeGrants(you.write) }}
+            <span v-if="policy" class="font-sans text-[var(--color-muted)]">
+              · from DOCOWNERS
+            </span>
+          </dd>
         </div>
         <div class="flex gap-4">
           <dt class="w-40 shrink-0 text-sm text-[var(--color-muted)]">You can see</dt>
-          <dd class="text-sm font-mono break-all">{{ describeGrants(you.read) }}</dd>
+          <dd class="text-sm font-mono break-all">
+            {{ policy ? (readableFolders.join(', ') || 'nothing') : describeGrants(you.read) }}
+            <span v-if="policy" class="font-sans text-[var(--color-muted)]">
+              · from DOCOWNERS
+            </span>
+          </dd>
         </div>
       </dl>
 

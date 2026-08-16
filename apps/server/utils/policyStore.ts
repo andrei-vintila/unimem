@@ -11,7 +11,7 @@ import { useStorage } from 'nitro/storage';
 // policy is visible, diffable and travels with a clone - but that copy is a
 // projection, the way the index is a projection of the files.
 
-import { parseDocowners, type Policy } from './docowners';
+import { parseDocowners, type Policy } from '@unimem/okf';
 
 const NS = 'sync';
 const KEY = 'docowners';
