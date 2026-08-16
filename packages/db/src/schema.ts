@@ -183,6 +183,21 @@ export const resources = pgTable('resources', {
 });
 
 // -----------------------------------------------------------------------------
+// Merge Base
+// -----------------------------------------------------------------------------
+
+/**
+ * What this device and the server last agreed each entity said. The third
+ * input to a three-way merge - see packages/db/src/merge.ts.
+ */
+export const syncBase = pgTable('sync_base', {
+  entityId: uuid('entity_id').primaryKey(),
+  entity: jsonb('entity').$type<Record<string, unknown>>().notNull(),
+  syncVersion: text('sync_version'),
+  capturedAt: timestamp('captured_at').notNull().defaultNow(),
+});
+
+// -----------------------------------------------------------------------------
 // Sync Log (for ElectricSQL conflict resolution)
 // -----------------------------------------------------------------------------
 

@@ -23,7 +23,8 @@
     "@unimem/core": "workspace:*",
     "@unimem/okf": "workspace:*",
     "@unimem/types": "workspace:*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "node-diff3": "^3.2.1"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.10",
