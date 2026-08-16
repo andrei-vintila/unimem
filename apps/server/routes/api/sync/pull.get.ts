@@ -1,8 +1,13 @@
 import { createError, defineEventHandler, getQuery } from 'h3';
 
 import { trackEvents } from '~/utils/analytics';
+import { requireVaultId } from '~/utils/auth';
 import type { Entity } from '@unimem/types';
-import { getEntitiesAfterVersion, generateVersion } from '~/utils/syncStore';
+import {
+  getEntitiesAfter,
+  formatCursor,
+  parseCursor,
+} from '~/utils/syncStore';
 
 interface PullResponse {
   entities: Entity[];
@@ -12,9 +17,11 @@ interface PullResponse {
 
 export default defineEventHandler(async (event): Promise<PullResponse> => {
   const startedAt = Date.now();
+  const vaultId = await requireVaultId(event);
+
   const query = getQuery(event);
   const clientId = query.clientId as string;
-  const lastSyncVersion = (query.lastSyncVersion as string) || '0';
+  const since = parseCursor(query.lastSyncVersion as string | undefined);
   const limit = Math.min(parseInt((query.limit as string) || '100', 10), 500);
 
   if (!clientId) {
@@ -24,28 +31,18 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     });
   }
 
-  const { items, hasMore } = await getEntitiesAfterVersion(
-    lastSyncVersion,
+  const { items, hasMore, cursor } = await getEntitiesAfter(
+    vaultId,
+    since,
     clientId,
     limit
-  );
-
-  // The new cursor for the client is the version of the last returned item.
-  // If nothing changed, echo back the client's cursor so it doesn't regress.
-  const syncVersion =
-    items.length > 0
-      ? items[items.length - 1].serverVersion
-      : lastSyncVersion || generateVersion();
-
-  console.log(
-    `[Sync] Pull for ${clientId} since ${lastSyncVersion}: ${items.length} entities, hasMore=${hasMore}`
   );
 
   const entities = items.map((stored) => stored.entity);
 
   trackEvents(
     event,
-    clientId,
+    vaultId,
     {
       name: 'sync_started',
       properties: { direction: 'pull', entity_count: 0 },
@@ -61,5 +58,5 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     }
   );
 
-  return { entities, syncVersion, hasMore };
+  return { entities, syncVersion: formatCursor(cursor), hasMore };
 });

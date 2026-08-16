@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "tsc && node --test test/",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts"
   },

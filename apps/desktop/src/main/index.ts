@@ -9,6 +9,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 
+import { closeDatabase, registerDatabaseHandlers } from './database';
 import { registerPathHandlers } from './paths';
 import { handleAppScheme, registerAppScheme } from './protocol';
 import { createMainWindow } from './window';
@@ -53,6 +54,7 @@ function main(): void {
     if (!isDev) handleAppScheme(RENDERER_ROOT);
 
     registerPathHandlers();
+    registerDatabaseHandlers();
     createMainWindow({ devUrl: isDev ? DEV_URL : undefined });
 
     // macOS keeps the process alive after the last window closes; clicking the
@@ -66,6 +68,19 @@ function main(): void {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+  });
+
+  // Electron will not wait on an async listener, so the close is held open by
+  // deferring the quit until PGlite has finished flushing its data directory.
+  let closed = false;
+  app.on('before-quit', (event) => {
+    if (closed) return;
+
+    event.preventDefault();
+    void closeDatabase().finally(() => {
+      closed = true;
+      app.quit();
+    });
   });
 
   // Belt and braces alongside the per-window handler: no renderer in this app

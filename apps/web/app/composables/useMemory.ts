@@ -6,7 +6,12 @@ import type {
   EntityFilter,
 } from '@unimem/types';
 import { MemoryEngine } from '@unimem/core';
-import { DatabaseClient, PGliteStorageAdapter } from '@unimem/db';
+import type { SqlDatabase } from '@unimem/db';
+import {
+  DatabaseClient,
+  PGliteStorageAdapter,
+  RemoteDatabaseClient,
+} from '@unimem/db';
 import { toErrorCode } from '@unimem/analytics';
 
 // Global state
@@ -14,8 +19,34 @@ const isInitialized = ref(false);
 const isLoading = ref(false);
 const stats = ref<MemoryStats | null>(null);
 
-let dbClient: DatabaseClient | null = null;
+let dbClient: SqlDatabase | null = null;
 let memoryEngine: MemoryEngine | null = null;
+
+/**
+ * Open the database this surface can actually use.
+ *
+ * On desktop that is a real file in the user's app data directory, opened by
+ * the Electron main process and reached over IPC - the renderer is sandboxed
+ * and cannot open it directly. In a browser there is no filesystem to reach,
+ * so PGlite persists to IndexedDB. Everything above this returns the same
+ * `SqlDatabase` either way.
+ */
+async function openDatabase(): Promise<SqlDatabase> {
+  const desktop = typeof window === 'undefined' ? undefined : window.unimem;
+
+  if (desktop) {
+    const client = new RemoteDatabaseClient(desktop.db);
+    await client.initialize();
+    return client;
+  }
+
+  const client = new DatabaseClient({
+    dataDir: 'idb://unimem',
+    enableVector: true,
+  });
+  await client.initialize();
+  return client;
+}
 
 export function useMemory() {
   const analytics = useAnalytics();
@@ -30,13 +61,7 @@ export function useMemory() {
     const startedAt = performance.now();
 
     try {
-      // Create database client with IndexedDB storage (browser)
-      dbClient = new DatabaseClient({
-        dataDir: 'idb://unimem',
-        enableVector: true,
-      });
-
-      await dbClient.initialize();
+      dbClient = await openDatabase();
 
       // Create storage adapter
       const storageAdapter = new PGliteStorageAdapter(dbClient);
@@ -51,14 +76,8 @@ export function useMemory() {
       // Load initial stats
       stats.value = await memoryEngine.getStats();
 
-      // Initialise sync manager if a server URL is configured
-      const runtimeConfig = useRuntimeConfig();
-      const serverUrl = runtimeConfig.public?.syncServerUrl as string | undefined;
-      if (serverUrl) {
-        const { init, start } = useSync();
-        init(dbClient, serverUrl);
-        start();
-      }
+      // Sync starts itself if this device has a server and token configured.
+      useSync().attach(dbClient);
 
       isInitialized.value = true;
 

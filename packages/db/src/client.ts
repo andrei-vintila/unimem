@@ -4,7 +4,27 @@
 
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import * as schema from './schema';
+import * as schema from './schema.js';
+import { SCHEMA_SQL } from './schema-sql.js';
+
+// -----------------------------------------------------------------------------
+// Database surface
+// -----------------------------------------------------------------------------
+
+/** A Drizzle handle bound to this package's schema. */
+export type UnimemDatabase = ReturnType<typeof drizzle<typeof schema>>;
+
+/**
+ * What the storage adapter and the sync manager actually need from a database.
+ *
+ * Kept narrower than `DatabaseClient` so the desktop shell can supply a client
+ * that forwards to a PGlite instance in another process - the renderer there is
+ * sandboxed and cannot open the database file itself. See `RemoteDatabaseClient`.
+ */
+export interface SqlDatabase {
+  getDb(): UnimemDatabase;
+  execute(sql: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
+}
 
 // -----------------------------------------------------------------------------
 // Database Client Configuration
@@ -34,9 +54,9 @@ export interface DatabaseConfig {
 // Database Client
 // -----------------------------------------------------------------------------
 
-export class DatabaseClient {
+export class DatabaseClient implements SqlDatabase {
   private pglite: PGlite | null = null;
-  private db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+  private db: UnimemDatabase | null = null;
   private config: DatabaseConfig;
   private initialized = false;
 
@@ -122,108 +142,7 @@ export class DatabaseClient {
       }
     }
 
-    // `exec`, not `query`: PGlite's `query` uses the extended protocol, which
-    // carries exactly one statement per prepared statement and rejects a batch
-    // like this one with "cannot insert multiple commands into a prepared
-    // statement". `exec` uses the simple protocol, which takes a script.
-    await pg.exec(`
-      -- Entities table
-      CREATE TABLE IF NOT EXISTS entities (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        type TEXT NOT NULL,
-        memory_layer TEXT NOT NULL,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        embedding REAL[],
-        metadata JSONB,
-        links JSONB DEFAULT '[]',
-        tags TEXT[] DEFAULT '{}',
-        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        sync_status TEXT DEFAULT 'synced',
-        sync_version TEXT
-      );
-
-      -- Indexes
-      CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
-      CREATE INDEX IF NOT EXISTS idx_entities_memory_layer ON entities(memory_layer);
-      CREATE INDEX IF NOT EXISTS idx_entities_created_at ON entities(created_at);
-      CREATE INDEX IF NOT EXISTS idx_entities_updated_at ON entities(updated_at);
-
-      -- Daily notes
-      CREATE TABLE IF NOT EXISTS daily_notes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        date TEXT NOT NULL UNIQUE,
-        summary TEXT
-      );
-
-      -- People
-      CREATE TABLE IF NOT EXISTS people (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        email TEXT,
-        company TEXT,
-        role TEXT,
-        last_contact TIMESTAMP
-      );
-
-      -- Companies
-      CREATE TABLE IF NOT EXISTS companies (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        industry TEXT,
-        website TEXT
-      );
-
-      -- Projects
-      CREATE TABLE IF NOT EXISTS projects (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        status TEXT NOT NULL DEFAULT 'active',
-        start_date TIMESTAMP,
-        end_date TIMESTAMP
-      );
-
-      -- Tasks
-      CREATE TABLE IF NOT EXISTS tasks (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        status TEXT NOT NULL DEFAULT 'todo',
-        priority TEXT NOT NULL DEFAULT 'medium',
-        due_date TIMESTAMP,
-        project_id UUID REFERENCES projects(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-      CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
-
-      -- Areas
-      CREATE TABLE IF NOT EXISTS areas (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        scope TEXT
-      );
-
-      -- Resources
-      CREATE TABLE IF NOT EXISTS resources (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        source_url TEXT,
-        resource_type TEXT NOT NULL DEFAULT 'reference'
-      );
-
-      -- Sync log
-      CREATE TABLE IF NOT EXISTS sync_log (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        entity_id UUID NOT NULL,
-        operation TEXT NOT NULL,
-        payload JSONB,
-        timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
-        client_id TEXT NOT NULL,
-        resolved TIMESTAMP
-      );
-    `);
+    await pg.exec(SCHEMA_SQL);
   }
 }
 

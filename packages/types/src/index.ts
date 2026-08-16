@@ -64,6 +64,18 @@ export interface BaseEntity {
   createdAt: Date;
   updatedAt: Date;
 
+  /**
+   * When this entity was deleted, if it was.
+   *
+   * Deletion is a tombstone rather than a removal because it has to travel:
+   * a row that simply vanished locally is indistinguishable, from another
+   * device's point of view, from one that never existed - so the other device
+   * would keep its copy, and pushing an edit would resurrect it. Tombstones
+   * are filtered out of every read, so they are invisible above the storage
+   * layer.
+   */
+  deletedAt?: Date;
+
   // Relations
   links: EntityLink[];
   tags: string[];
@@ -193,6 +205,11 @@ export interface SyncConflict {
 export interface ReplicationConfig {
   enabled: boolean;
   serverUrl?: string;
+  /**
+   * Sync token. The server derives the vault namespace from it, so every
+   * device that should share a vault has to present the same token.
+   */
+  authToken?: string;
   syncInterval: number; // milliseconds
   conflictResolution: 'local-wins' | 'remote-wins' | 'manual';
 }

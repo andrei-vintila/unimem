@@ -26,14 +26,10 @@ function documentDir(): string {
 }
 
 /**
- * Where the database belongs on disk.
- *
- * Note that the renderer cannot open this path today: PGlite in a browser
- * context is backed by IndexedDB (`idb://unimem`, see the web app's
- * `useMemory`). This is here for the main-process database that persistence
- * will move to, and so the shell can report the location in settings.
+ * Where the database belongs on disk. Opened by `./database`, which is the
+ * only thing that can: the renderer is sandboxed and reaches it over IPC.
  */
-async function databasePath(): Promise<string> {
+export async function databasePath(): Promise<string> {
   return path.join(await appDataDir(), DATABASE_FILENAME);
 }
 

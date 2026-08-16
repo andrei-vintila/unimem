@@ -11,6 +11,15 @@
 export {};
 
 declare global {
+  interface UnimemDesktopDatabase {
+    query(request: {
+      sql: string;
+      params: unknown[];
+      rowMode: 'array' | 'object';
+    }): Promise<{ rows: unknown[] }>;
+    exec(sql: string): Promise<void>;
+  }
+
   interface UnimemDesktopBridge {
     readonly isDesktop: true;
     readonly platform: 'macos' | 'windows' | 'linux' | undefined;
@@ -19,6 +28,9 @@ declare global {
     getAppDataDir(): Promise<string>;
     getDocumentDir(): Promise<string>;
     getDatabasePath(): Promise<string>;
+
+    /** The shell's file-backed database, reached over IPC. */
+    readonly db: UnimemDesktopDatabase;
   }
 
   interface Window {
