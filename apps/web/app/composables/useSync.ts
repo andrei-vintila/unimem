@@ -60,7 +60,15 @@ export function useSync() {
       paths: () => store?.entityPaths() ?? {},
       // Only where a bundle is the store. In the browser the index is the
       // store, and there is nothing else to write.
-      ...(store ? { applyRemote: (entity) => store!.applyRemote(entity) } : {}),
+      ...(store
+        ? {
+            applyRemote: (entity) => store!.applyRemote(entity),
+            policyFile: {
+              read: () => store!.readPolicy(),
+              write: (source: string) => store!.writePolicy(source),
+            },
+          }
+        : {}),
       replication: {
         enabled: true,
         serverUrl: settings.serverUrl.value,

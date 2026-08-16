@@ -35,6 +35,7 @@ import type {
   MemoryEvent,
 } from '@unimem/types';
 import type { SqlDatabase } from './client.js';
+import { mergeEntities } from './merge.js';
 
 // -----------------------------------------------------------------------------
 // Configuration
@@ -61,6 +62,18 @@ export interface SyncManagerConfig {
    * the store, such as the browser.
    */
   applyRemote?: (entity: Entity) => Promise<void>;
+  /**
+   * The vault's access policy, as a file in the bundle.
+   *
+   * Omit on a surface with no bundle. Without this the policy exists only in
+   * the server's store, and none of the reasons for expressing it as a file -
+   * that it is versioned, diffable, and travels with a clone - are actually
+   * true of it.
+   */
+  policyFile?: {
+    read(): Promise<string | null>;
+    write(source: string): Promise<void>;
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -95,6 +108,21 @@ function rowToEntity(row: Record<string, unknown>): Entity {
   return base as Entity;
 }
 
+/**
+ * Restore the Date fields JSON flattened into strings.
+ *
+ * A merge base is stored as JSON, and a merge compares timestamps - so a base
+ * whose dates came back as strings would compare unequal to an identical Date
+ * and report a conflict that is not one.
+ */
+function reviveDates(value: Record<string, unknown>): Entity {
+  const revived = { ...value };
+  for (const key of ['createdAt', 'updatedAt', 'deletedAt']) {
+    if (typeof revived[key] === 'string') revived[key] = new Date(revived[key] as string);
+  }
+  return revived as unknown as Entity;
+}
+
 // -----------------------------------------------------------------------------
 // SyncManager
 // -----------------------------------------------------------------------------
@@ -107,6 +135,10 @@ export class SyncManager {
   private clientId: string;
   private paths: () => Record<string, string>;
   private applyRemote?: (entity: Entity) => Promise<void>;
+  private policyFile?: SyncManagerConfig['policyFile'];
+
+  /** The policy as the server last reported it, to tell a local edit apart. */
+  private lastKnownPolicy: string | null = null;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
   private eventHandlers: Set<SyncEventHandler> = new Set();
 
@@ -138,6 +170,7 @@ export class SyncManager {
     this.clientId = config.clientId;
     this.paths = config.paths ?? (() => ({}));
     this.applyRemote = config.applyRemote;
+    this.policyFile = config.policyFile;
   }
 
   // ---------------------------------------------------------------------------
@@ -188,12 +221,15 @@ export class SyncManager {
       }
 
       await this.pullChanges();
+      await this.syncPolicy();
+
+      const conflictCount = await this.getConflictCount();
 
       this.state = {
-        status: 'synced',
+        status: conflictCount > 0 ? 'conflict' : 'synced',
         lastSyncedAt: new Date(),
         pendingChanges: 0,
-        conflictCount: await this.getConflictCount(),
+        conflictCount,
       };
 
       this.emit('sync:completed', this.state);
@@ -325,6 +361,101 @@ export class SyncManager {
   }
 
   // ---------------------------------------------------------------------------
+  // Policy
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Reconcile the DOCOWNERS file with the server's copy.
+   *
+   * The server is the enforcement point, so its copy is what actually governs -
+   * but the file is how a person reads and changes the policy, so an edit made
+   * there has to reach the server or the file is decoration.
+   *
+   * A local edit is anything differing from what the server last reported.
+   * Pushing it only succeeds for the owner; for anyone else the server refuses
+   * and the file is put back, which is the honest outcome: they are looking at
+   * a policy they cannot change.
+   */
+  private async syncPolicy(): Promise<void> {
+    if (!this.policyFile) return;
+
+    const response = await fetch(`${this.config.serverUrl}/api/vault/docowners`, {
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) return;
+
+    const remote = ((await response.json()) as { source: string | null }).source;
+    const local = await this.policyFile.read();
+
+    if (local === remote) {
+      this.lastKnownPolicy = remote;
+      return;
+    }
+
+    const editedHere =
+      local !== null && this.lastKnownPolicy !== null && local !== this.lastKnownPolicy;
+
+    if (editedHere) {
+      const saved = await fetch(`${this.config.serverUrl}/api/vault/docowners`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+        body: JSON.stringify({ source: local }),
+      });
+
+      if (saved.ok) {
+        this.lastKnownPolicy = local;
+        return;
+      }
+
+      console.warn(
+        '[SyncManager] Policy edit not accepted; restoring the vault copy. ' +
+          'Only the vault owner can change DOCOWNERS.'
+      );
+    }
+
+    if (remote !== null) await this.policyFile.write(remote);
+    this.lastKnownPolicy = remote;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Merge base
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Record what this device and the server now agree the entity says.
+   *
+   * Captured on every accepted push and every applied pull, because that is
+   * exactly when the two sides are known to be in step. It is the third input
+   * a real merge needs; without it the only available answer is to pick a
+   * winner and discard the loser's work.
+   */
+  private async captureBase(entity: Entity, syncVersion: string): Promise<void> {
+    await this.client.execute(
+      `INSERT INTO sync_base (entity_id, entity, sync_version, captured_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (entity_id) DO UPDATE
+         SET entity = EXCLUDED.entity,
+             sync_version = EXCLUDED.sync_version,
+             captured_at = NOW()`,
+      [entity.id, JSON.stringify(entity), syncVersion]
+    );
+  }
+
+  private async readBase(entityId: string): Promise<Entity | null> {
+    const result = await this.client.execute(
+      `SELECT entity FROM sync_base WHERE entity_id = $1`,
+      [entityId]
+    );
+
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    if (!row) return null;
+
+    // JSONB comes back parsed; a driver that hands back text is still valid.
+    const value = typeof row.entity === 'string' ? JSON.parse(row.entity) : row.entity;
+    return reviveDates(value as Record<string, unknown>);
+  }
+
+  // ---------------------------------------------------------------------------
   // Push
   // ---------------------------------------------------------------------------
 
@@ -434,6 +565,7 @@ export class SyncManager {
            WHERE id = $2`,
           [result.syncVersion, entity.id]
         );
+        await this.captureBase(entity, result.syncVersion);
       }
     }
   }
@@ -518,7 +650,7 @@ export class SyncManager {
     syncVersion: string
   ): Promise<void> {
     const existing = await this.client.execute(
-      `SELECT updated_at FROM entities WHERE id = $1`,
+      `SELECT * FROM entities WHERE id = $1`,
       [entity.id]
     );
 
@@ -554,11 +686,55 @@ export class SyncManager {
         ]
       );
     } else {
-      const localUpdatedMs = new Date(
-        (existing.rows[0] as Record<string, unknown>).updated_at as string
-      ).getTime();
+      const localRow = existing.rows[0] as Record<string, unknown>;
+      const localUpdatedMs = new Date(localRow.updated_at as string).getTime();
 
-      if (remoteUpdatedMs > localUpdatedMs) {
+      // 'proposed' counts: it is a local change the server declined to apply
+      // directly, not an absence of one.
+      const status = localRow.sync_status as string;
+      const hasLocalChanges = status === 'pending' || status === 'proposed';
+
+      // Both sides have moved since they last agreed. Rather than picking a
+      // winner and discarding the other's work, merge against the version they
+      // diverged from - which is what `sync_base` is for. Only genuinely
+      // overlapping edits survive as a conflict for someone to settle.
+      const base = hasLocalChanges ? await this.readBase(entity.id) : null;
+
+      if (base) {
+        const local = rowToEntity(localRow);
+        const merged = mergeEntities(base, local, entity);
+
+        if (merged.conflicted) {
+          await this.client.execute(
+            `INSERT INTO sync_log (entity_id, operation, payload, client_id)
+             VALUES ($1, 'conflict', $2, $3)`,
+            [
+              entity.id,
+              JSON.stringify({ local, remote: entity }),
+              this.clientId,
+            ]
+          );
+          this.emit('sync:conflict', { entityId: entity.id, fields: merged.conflicts });
+        }
+
+        // The remote is now something this device has seen, so it becomes the
+        // point any *next* divergence is measured from. Leaving the old base in
+        // place would merge the following change against an ancestor two steps
+        // back and reintroduce edits that were already reconciled.
+        await this.captureBase(entity, syncVersion);
+
+        // A merge is a new local edit: it has to go back to the server, or the
+        // other side never learns what this one reconciled.
+        await this.writeMerged(merged.entity, merged.conflicted);
+        if (this.applyRemote) await this.applyRemote(merged.entity);
+        return;
+      }
+
+      // No local changes, so there is nothing to weigh the remote against and
+      // the server is simply right. Comparing timestamps here is what used to
+      // strand a device: two edits in the same millisecond tie, the comparison
+      // says "not newer", and the vault silently stops converging.
+      if (!hasLocalChanges || remoteUpdatedMs > localUpdatedMs) {
         applied = true;
         await this.client.execute(
           `UPDATE entities
@@ -589,21 +765,66 @@ export class SyncManager {
     // on disk, a change that only reached the index would be thrown away by
     // the next rebuild - so the files are brought into line here, and only for
     // changes actually accepted by the comparison above.
-    if (applied && this.applyRemote) {
-      await this.applyRemote(entity);
+    if (applied) {
+      await this.captureBase(entity, syncVersion);
+      if (this.applyRemote) await this.applyRemote(entity);
     }
+  }
+
+  /**
+   * Persist the result of a merge.
+   *
+   * Left pending, not synced: the merged text exists only here until the
+   * server has it, and marking it synced would strand the reconciliation on
+   * this device. A conflicted merge stays pending too - the markers are in the
+   * body, and pushing them is how the other side learns there is something to
+   * settle rather than silently keeping a version nobody agreed to.
+   */
+  private async writeMerged(entity: Entity, conflicted: boolean): Promise<void> {
+    await this.client.execute(
+      `UPDATE entities
+       SET title=$1, content=$2, metadata=$3, links=$4, tags=$5,
+           updated_at=$6, sync_status='pending'
+       WHERE id=$7`,
+      [
+        entity.title,
+        entity.content,
+        JSON.stringify(this.extractMetadata(entity)),
+        JSON.stringify(entity.links ?? []),
+        entity.tags ?? [],
+        entity.updatedAt,
+        entity.id,
+      ]
+    );
+
+    if (conflicted) this.updateState({ status: 'conflict' });
   }
 
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * How many conflicts this vault is carrying.
+   *
+   * Counts documents holding merge markers as well as entries in the log,
+   * because the device that merged is often not the device someone is looking
+   * at: the markers travel with the text, so a second device pulls a conflicted
+   * document without ever having merged anything. Reporting only what this
+   * device merged would show "synced" over a note full of `<<<<<<<`.
+   */
   private async getConflictCount(): Promise<number> {
-    const result = await this.client.execute(
+    const logged = await this.client.execute(
       `SELECT COUNT(*) AS count FROM sync_log WHERE resolved IS NULL`
     );
-    return Number(
-      (result.rows[0] as Record<string, unknown>)?.count ?? 0
+    const marked = await this.client.execute(
+      `SELECT COUNT(*) AS count FROM entities
+       WHERE deleted_at IS NULL AND content LIKE '%<<<<<<<%'`
+    );
+
+    return (
+      Number((logged.rows[0] as Record<string, unknown>)?.count ?? 0) +
+      Number((marked.rows[0] as Record<string, unknown>)?.count ?? 0)
     );
   }
 

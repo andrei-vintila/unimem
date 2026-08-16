@@ -1,7 +1,7 @@
 {
-  // Emits just the pure authorization logic so it can be unit-tested with
-  // `node --test`. It imports only types, so the compiled output has no
-  // runtime dependency on Nitro.
+  // Emits the pure authorization logic so it can be unit-tested with
+  // `node --test`. Both files import only types from the rest of the server, so
+  // the compiled output has no runtime dependency on Nitro.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,

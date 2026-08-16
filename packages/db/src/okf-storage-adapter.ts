@@ -26,6 +26,7 @@ import {
   indexPaths,
   readBundle,
   writeEntity,
+  POLICY_FILENAME,
   type BundleFs,
 } from '@unimem/okf';
 
@@ -209,6 +210,26 @@ export class OkfStorageAdapter implements StorageAdapter {
 
   getStats(): Promise<MemoryStats> {
     return this.index.getStats();
+  }
+
+  /**
+   * The vault's access policy as it currently sits on disk.
+   *
+   * Null when the vault has none. Read rather than cached because a person may
+   * have just edited it in a text editor, which is the entire point of it being
+   * a file rather than a server setting.
+   */
+  async readPolicy(): Promise<string | null> {
+    const path = this.root ? `${this.root}/${POLICY_FILENAME}` : POLICY_FILENAME;
+    if (!(await this.fs.exists(path))) return null;
+
+    return this.fs.readFile(path);
+  }
+
+  /** Write the policy into the bundle, byte for byte as the server holds it. */
+  async writePolicy(source: string): Promise<void> {
+    const path = this.root ? `${this.root}/${POLICY_FILENAME}` : POLICY_FILENAME;
+    await this.fs.writeFile(path, source);
   }
 
   /**

@@ -14,6 +14,7 @@
 
 import type { Entity } from '@unimem/types';
 
+import { policyAllows, type Policy } from '@unimem/okf';
 import type { Member } from './membership';
 
 /** A grant covering the entire vault. */
@@ -75,7 +76,17 @@ export function grantCovers(grant: string, path: string): boolean {
   return path === grant || path.startsWith(`${grant}/`);
 }
 
-export function canWritePath(member: Member, path: string): boolean {
+export function canWritePath(
+  member: Member,
+  path: string,
+  policy?: Policy | null
+): boolean {
+  // The owner is the root of trust and is deliberately not expressible in the
+  // policy file - otherwise a policy could lock out the only person able to
+  // change it back.
+  if (member.role === 'owner') return true;
+  if (policy) return policyAllows(policy, member.actor, 'write', path);
+
   return member.write.some((grant) => grantCovers(grant, path));
 }
 
@@ -94,7 +105,14 @@ export function effectiveRead(member: Member): string[] {
   return [...member.read, ...member.write];
 }
 
-export function canReadPath(member: Member, path: string): boolean {
+export function canReadPath(
+  member: Member,
+  path: string,
+  policy?: Policy | null
+): boolean {
+  if (member.role === 'owner') return true;
+  if (policy) return policyAllows(policy, member.actor, 'read', path);
+
   return effectiveRead(member).some((grant) => grantCovers(grant, path));
 }
 
@@ -109,6 +127,12 @@ export interface WriteRequest {
   claimedPath: unknown;
   /** What the server already holds, if anything. */
   stored?: { path: string; createdBy?: string } | null;
+  /**
+   * The vault's DOCOWNERS, when it has one. Absent means fall back to the
+   * grants on the membership record, which is how vaults that predate the
+   * policy file keep working.
+   */
+  policy?: Policy | null;
 }
 
 export type WriteDecision =
@@ -128,6 +152,7 @@ export function decideWrite({
   entity,
   claimedPath,
   stored,
+  policy,
 }: WriteRequest): WriteDecision {
   const path = resolvePath(entity, claimedPath);
   if (path === null) {
@@ -141,19 +166,19 @@ export function decideWrite({
 
   // Where it already is. Without this, a member could take a document out of a
   // folder they cannot write by pushing it back under one they can.
-  if (stored && !canWritePath(member, stored.path) && !isCreator) {
+  if (stored && !canWritePath(member, stored.path, policy) && !isCreator) {
     // Naming the folder would otherwise let someone probe entity ids and map
     // out the parts of the vault they cannot see.
     return {
       allowed: false,
-      reason: canReadPath(member, stored.path)
+      reason: canReadPath(member, stored.path, policy)
         ? `No write access to ${folderOf(stored.path)}`
         : 'No write access to this document',
     };
   }
 
   // Where it is going.
-  if (!canWritePath(member, path) && !isCreator) {
+  if (!canWritePath(member, path, policy) && !isCreator) {
     return { allowed: false, reason: `No write access to ${folderOf(path)}` };
   }
 

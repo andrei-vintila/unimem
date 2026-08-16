@@ -4,6 +4,7 @@ import { trackEvents } from '~/utils/analytics';
 import { requireMember } from '~/utils/auth';
 import { decideWrite, resolvePath } from '~/utils/authz';
 import { putRequest, requestId } from '~/utils/changeRequests';
+import { loadPolicy } from '~/utils/policyStore';
 import type { Entity } from '@unimem/types';
 import {
   getStoredEntity,
@@ -55,6 +56,8 @@ export default defineEventHandler(async (event): Promise<PushResponse> => {
     });
   }
 
+  const policy = await loadPolicy(member.vaultId);
+
   const newVersion = generateVersion();
   const seenAt = parseCursor(body.lastSyncVersion).version;
   const conflicts: PushResponse['conflicts'] = [];
@@ -70,6 +73,7 @@ export default defineEventHandler(async (event): Promise<PushResponse> => {
       entity,
       claimedPath: body.paths?.[entity.id],
       stored: stored ? { path: stored.path, createdBy: stored.createdBy } : null,
+      policy,
     });
 
     if (!decision.allowed) {

@@ -3,6 +3,7 @@ import { createError, defineEventHandler, getQuery } from 'h3';
 import { trackEvents } from '~/utils/analytics';
 import { requireMember } from '~/utils/auth';
 import { canReadPath } from '~/utils/authz';
+import { loadPolicy } from '~/utils/policyStore';
 import type { Entity } from '@unimem/types';
 import {
   getEntitiesAfter,
@@ -29,6 +30,8 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
   const member = await requireMember(event);
   const vaultId = member.vaultId;
 
+  const policy = await loadPolicy(vaultId);
+
   const query = getQuery(event);
   const clientId = query.clientId as string;
   const since = parseCursor(query.lastSyncVersion as string | undefined);
@@ -46,7 +49,7 @@ export default defineEventHandler(async (event): Promise<PullResponse> => {
     since,
     clientId,
     limit,
-    (path) => canReadPath(member, path)
+    (path) => canReadPath(member, path, policy)
   );
 
   const entities = items.map((stored) => stored.entity);

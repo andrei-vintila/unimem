@@ -13,6 +13,15 @@
 /** Reserved by OKF; never a concept document. */
 export const RESERVED_FILENAMES = new Set(['index.md', 'log.md']);
 
+/**
+ * The vault's access policy, at the bundle root.
+ *
+ * Deliberately without a `.md` extension, following CODEOWNERS. That also
+ * keeps it out of the concept walk without needing a special case: a bundle
+ * read only ever considers `.md` files, so the policy is simply not a document.
+ */
+export const POLICY_FILENAME = 'DOCOWNERS';
+
 /** URI scheme that makes a document's identity independent of its path. */
 export const RESOURCE_PREFIX = 'unimem://entity/';
 

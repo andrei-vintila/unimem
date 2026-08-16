@@ -108,6 +108,19 @@ export const SCHEMA_SQL = `
     resource_type TEXT NOT NULL DEFAULT 'reference'
   );
 
+  -- The version of each entity this device and the server last agreed on.
+  --
+  -- Without it a divergence is unreadable: there is no way to tell an edit
+  -- from a deletion, or which side changed what, so the only available answer
+  -- is last-write-wins and somebody's work is thrown away. This is the third
+  -- input that makes a real merge possible.
+  CREATE TABLE IF NOT EXISTS sync_base (
+    entity_id UUID PRIMARY KEY,
+    entity JSONB NOT NULL,
+    sync_version TEXT,
+    captured_at TIMESTAMP NOT NULL DEFAULT NOW()
+  );
+
   -- Sync log
   CREATE TABLE IF NOT EXISTS sync_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -21,6 +21,19 @@ import { appDataDir } from './paths';
 /** Directory name of the vault inside the app data directory. */
 const BUNDLE_DIRNAME = 'vault';
 
+/**
+ * The one file in a vault that is not a document.
+ *
+ * Writes are otherwise confined to `.md` so a compromised renderer cannot drop
+ * arbitrary files into the user's directory; the access policy is the single
+ * deliberate exception, and it is named exactly rather than by extension.
+ */
+const POLICY_FILENAME = 'DOCOWNERS';
+
+function isWritableName(target: string): boolean {
+  return path.extname(target) === '.md' || path.basename(target) === POLICY_FILENAME;
+}
+
 export async function bundleRoot(): Promise<string> {
   const root = path.join(await appDataDir(), BUNDLE_DIRNAME);
   await fs.mkdir(root, { recursive: true });
@@ -75,10 +88,8 @@ async function run(root: string, request: BundleOpRequest): Promise<unknown> {
       if (typeof request.content !== 'string') {
         throw new Error('writeFile needs string content');
       }
-      // Only ever markdown. The renderer has no business putting anything
-      // else in the user's vault directory.
-      if (path.extname(target) !== '.md') {
-        throw new Error('Bundle writes must be .md files');
+      if (!isWritableName(target)) {
+        throw new Error('Bundle writes must be .md files or DOCOWNERS');
       }
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, request.content, 'utf8');
@@ -86,8 +97,8 @@ async function run(root: string, request: BundleOpRequest): Promise<unknown> {
     }
 
     case 'deleteFile':
-      if (path.extname(target) !== '.md') {
-        throw new Error('Bundle deletes must be .md files');
+      if (!isWritableName(target)) {
+        throw new Error('Bundle deletes must be .md files or DOCOWNERS');
       }
       await fs.rm(target, { force: true });
       return true;

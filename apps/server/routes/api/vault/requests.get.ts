@@ -3,6 +3,7 @@ import { defineEventHandler } from 'h3';
 import { requireMember } from '~/utils/auth';
 import { canReadPath, canWritePath } from '~/utils/authz';
 import { listRequests } from '~/utils/changeRequests';
+import { loadPolicy } from '~/utils/policyStore';
 
 /**
  * Change requests this member has anything to do with.
@@ -14,10 +15,11 @@ import { listRequests } from '~/utils/changeRequests';
 export default defineEventHandler(async (event) => {
   const member = await requireMember(event);
   const requests = await listRequests(member.vaultId);
+  const policy = await loadPolicy(member.vaultId);
 
   const visible = requests.filter(
     (request) =>
-      request.proposedBy === member.actor || canReadPath(member, request.path)
+      request.proposedBy === member.actor || canReadPath(member, request.path, policy)
   );
 
   const summarise = (request: (typeof visible)[number]) => ({
@@ -39,7 +41,7 @@ export default defineEventHandler(async (event) => {
         (request) =>
           request.status === 'open' &&
           request.proposedBy !== member.actor &&
-          canWritePath(member, request.path)
+          canWritePath(member, request.path, policy)
       )
       .map(summarise),
     mine: visible
