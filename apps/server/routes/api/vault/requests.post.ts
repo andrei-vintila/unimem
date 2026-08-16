@@ -3,6 +3,7 @@ import { createError, defineEventHandler, readBody } from 'h3';
 import { requireMember } from '~/utils/auth';
 import { canWritePath } from '~/utils/authz';
 import { getRequest, putRequest } from '~/utils/changeRequests';
+import { loadPolicy } from '~/utils/policyStore';
 import { generateVersion, getStoredEntity, setStoredEntity } from '~/utils/syncStore';
 
 interface ReviewPayload {
@@ -42,7 +43,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (!canWritePath(member, request.path)) {
+  if (!canWritePath(member, request.path, await loadPolicy(member.vaultId))) {
     throw createError({
       statusCode: 403,
       message: 'Only someone who can write this folder can decide',
